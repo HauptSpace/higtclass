@@ -39,14 +39,19 @@ type Token =
 
 function tokenize(src: string): Token[] {
   const out: Token[] = [];
+  // "1,02" is a decimal when `,` cannot be an argument separator: either the
+  // formula separates arguments with `;` (Excel in ru/uk/de/es), or it has no
+  // function calls at all.
+  const decimalComma = src.includes(";") || !/[\p{L}_]\s*\(/u.test(src);
+  const numberRe = decimalComma ? /^\d*[.,]?\d+/ : /^\d*\.?\d+/;
   let i = 0;
   while (i < src.length) {
     const c = src[i];
     if (/\s/.test(c)) {
       i++;
     } else if (/\d/.test(c) || (c === "." && /\d/.test(src[i + 1] ?? ""))) {
-      const m = src.slice(i).match(/^\d*\.?\d+/)!;
-      out.push({ t: "num", v: Number(m[0]) });
+      const m = src.slice(i).match(numberRe)!;
+      out.push({ t: "num", v: Number(m[0].replace(",", ".")) });
       i += m[0].length;
     } else if (c === "[") {
       const end = src.indexOf("]", i);
@@ -252,6 +257,18 @@ export function renameFormulaRefs(src: string, from: string, to: string): string
 
 export function findColumnByName(columns: Column[], name: string): Column | undefined {
   return columns.find((c) => sameName(c.name, name));
+}
+
+/**
+ * How a formula column should be displayed: a formula built on a money column
+ * is shown as money in that column's currency.
+ */
+export function displayColumn(table: Table, column: Column): Column {
+  if (column.type !== "formula" || !column.formula) return column;
+  const money = formulaRefs(column.formula)
+    .map((name) => findColumnByName(table.columns, name))
+    .find((c) => c?.type === "money");
+  return money ? { ...column, type: "money", currency: money.currency } : column;
 }
 
 function toNumber(v: Value): number {

@@ -1,0 +1,92 @@
+// Base dictionary: every other language must define the same keys.
+export const en = {
+  "app.tagline": "Tables that are easy",
+  "sidebar.tables": "Tables",
+  "sidebar.newTable": "New table",
+  "sidebar.settings": "Settings",
+  "settings.language": "Language",
+  "settings.currency": "Currency",
+
+  "empty.title": "Your numbers, without the spreadsheet pain",
+  "empty.subtitle": "Pick a template or start blank. Everything saves by itself — even offline.",
+
+  "newTable.title": "New table",
+  "newTable.blank": "Blank table",
+  "newTable.blankDesc": "Start from scratch",
+  "newTable.untitled": "New table",
+
+  "table.record": "Add entry",
+  "table.addColumn": "Column",
+  "table.viewGrid": "Table",
+  "table.viewSummary": "Summary",
+  "table.delete": "Delete table",
+  "table.deleteConfirm": "Delete the table “{name}” and all its entries?",
+  "table.count": "Entries: {n}",
+  "table.empty": "No entries yet",
+  "table.emptyHint": "Tap “Add entry” to write down the first one.",
+  "table.total": "Total",
+  "table.rename": "Rename",
+  "table.icon": "Icon",
+
+  "record.new": "New entry",
+  "record.edit": "Edit entry",
+  "record.save": "Save",
+  "record.saveAndNew": "Save & next",
+  "record.delete": "Delete entry",
+  "record.cancel": "Cancel",
+  "record.saved": "Saved",
+
+  "column.new": "New column",
+  "column.edit": "Column",
+  "column.name": "Name",
+  "column.type": "Type",
+  "column.options": "Choices",
+  "column.optionsHint": "Separate with commas",
+  "column.formula": "Formula",
+  "column.formulaHint": "Use column names in brackets: [Price] * [Quantity]",
+  "column.preview": "First row",
+  "column.currency": "Currency",
+  "column.currencyDefault": "Default ({code})",
+  "column.delete": "Delete column",
+  "column.deleteConfirm": "Delete the column “{name}”? Its values will be removed.",
+  "column.save": "Save",
+
+  "type.text": "Text",
+  "type.number": "Number",
+  "type.money": "Money",
+  "type.date": "Date",
+  "type.select": "Choice",
+  "type.checkbox": "Checkbox",
+  "type.formula": "Formula",
+
+  "problem.invalid_value": "Didn’t understand “{input}” for “{column}”",
+  "problem.unknown_column": "There is no column “{column}”",
+  "problem.invalid_formula": "The formula has an error",
+  "problem.formula_column": "“{column}” is calculated automatically",
+  "problem.unknown_row": "That entry no longer exists",
+
+  "formula.syntax": "Formula error",
+  "formula.ref": "Unknown column",
+  "formula.cycle": "Circular reference",
+  "formula.div0": "Division by zero",
+  "formula.type": "Not a number",
+
+  "undo.undo": "Undo",
+  "undo.redo": "Redo",
+  "undo.undone": "Undone",
+
+  "summary.by": "By “{column}”",
+  "summary.byMonth": "By month",
+  "summary.none": "Add a money or number column to see totals.",
+  "summary.empty": "(empty)",
+  "summary.avg": "Average",
+  "summary.max": "Largest",
+
+  "select.placeholder": "Pick or type a new one",
+  "common.close": "Close",
+  "common.search": "Search",
+  "assistant.soon": "Next up: an AI assistant — dictate an entry or snap a receipt.",
+} as const;
+
+export type MessageKey = keyof typeof en;
+export type Messages = Record<MessageKey, string>;

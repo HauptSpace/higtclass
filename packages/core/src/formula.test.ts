@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRow, renameFormulaRefs, validateFormula } from "./formula.ts";
+import { computeRow, displayColumn, renameFormulaRefs, validateFormula } from "./formula.ts";
 import type { Table } from "./types.ts";
 
 const today = "2026-10-29";
@@ -45,6 +45,12 @@ describe("formulas", () => {
     expect(calc("МАКС([Кол-во]; 10; 2)")).toEqual({ value: 10 });
   });
 
+  it("accepts decimal commas where they cannot be argument separators", () => {
+    expect(calc("[Цена] * 1,5")).toEqual({ value: 375 });
+    expect(calc("ОКРУГЛ([Цена] * 1,02; 1)")).toEqual({ value: 255 });
+    expect(calc("MAX(1,5)")).toEqual({ value: 5 });
+  });
+
   it("does date math", () => {
     expect(calc("DAYS([Срок], TODAY())")).toEqual({ value: 10 });
   });
@@ -65,6 +71,12 @@ describe("formulas", () => {
     expect(calc("[Цена] / 0")).toEqual({ error: "div0" });
     expect(calc("[Цена] * ")).toEqual({ error: "syntax" });
     expect(calc('[Категория] * 2')).toEqual({ error: "type" });
+  });
+
+  it("displays formulas over money as money", () => {
+    const t = table({ m: "[Цена] * 2", n: "[Кол-во] * 2" });
+    expect(displayColumn(t, t.columns.find((c) => c.id === "m")!).type).toBe("money");
+    expect(displayColumn(t, t.columns.find((c) => c.id === "n")!).type).toBe("formula");
   });
 
   it("validates and rewrites references", () => {
