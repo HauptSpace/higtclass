@@ -26,9 +26,17 @@ interface Toast {
   undoable: boolean;
 }
 
+export type Theme = "system" | "light" | "dark";
+
+export interface AppSettings extends Settings {
+  theme: Theme;
+  /** Company accent colour; null keeps Zifra black and white. */
+  accent: string | null;
+}
+
 interface State {
   ws: Workspace;
-  settings: Settings;
+  settings: AppSettings;
   activeTableId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
@@ -38,16 +46,16 @@ interface State {
   undo: () => void;
   redo: () => void;
   setActiveTable: (id: string | null) => void;
-  setSettings: (patch: Partial<Settings>) => void;
+  setSettings: (patch: Partial<AppSettings>) => void;
   showToast: (text: string, undoable?: boolean) => void;
   hideToast: () => void;
 }
 
 const HISTORY_LIMIT = 200;
 
-function initialSettings(): Settings {
+function initialSettings(): AppSettings {
   const locale = detectLocale(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
-  return { locale, currency: LOCALE_RULES[locale].defaultCurrency };
+  return { locale, currency: LOCALE_RULES[locale].defaultCurrency, theme: "system", accent: null };
 }
 
 // IndexedDB can be unavailable (private mode, blocked storage): the app must
@@ -149,8 +157,13 @@ export const useStore = create<State>()(
       },
     }),
     {
-      name: "higtclass:v1",
-      version: 1,
+      name: "zifra:v1",
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<State>;
+        if (version < 2 && state.settings) state.settings = { ...initialSettings(), ...state.settings };
+        return state as State;
+      },
       storage: createJSONStorage(() => idbStorage),
       partialize: (s) => ({ ws: s.ws, settings: s.settings, activeTableId: s.activeTableId }),
     },

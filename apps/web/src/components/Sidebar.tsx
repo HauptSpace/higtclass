@@ -1,7 +1,15 @@
 import { CURRENCIES, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
-import { useActiveTable, useStore } from "../store.ts";
-import { inputClass } from "./ui.tsx";
+import { useActiveTable, useStore, type Theme } from "../store.ts";
+
+export const ACCENTS = ["#E5352B", "#1F4FE0", "#FF7A1A", "#6D4AFF", "#7A4B2A", "#E2457A"];
+
+export function Wordmark({ className = "" }: { className?: string }) {
+  return <span className={`font-display font-bold tracking-[-0.05em] ${className}`}>zifra</span>;
+}
+
+const railSelect =
+  "w-full rounded-lg border border-white/15 bg-transparent px-2 py-1.5 text-sm text-rail-text outline-none focus:border-white/60 [&>option]:text-black";
 
 export function Sidebar({ onNewTable, onNavigate }: { onNewTable: () => void; onNavigate?: () => void }) {
   const t = useT();
@@ -12,80 +20,124 @@ export function Sidebar({ onNewTable, onNavigate }: { onNewTable: () => void; on
   const setActiveTable = useStore((s) => s.setActiveTable);
 
   const changeLocale = (locale: Locale) => {
-    // Switching language also switches the default currency only if the user
-    // never picked one different from the old language's default.
+    // The currency follows the language only if the person never picked their own.
     const keepCurrency = settings.currency !== LOCALE_RULES[settings.locale].defaultCurrency;
     setSettings({ locale, currency: keepCurrency ? settings.currency : LOCALE_RULES[locale].defaultCurrency });
-    document.documentElement.lang = locale;
   };
 
   return (
-    <nav className="flex h-full flex-col gap-4 p-4">
-      <div className="px-2">
-        <div className="text-xl font-extrabold tracking-tight">
-          higt<span className="text-brand-600">class</span>
-        </div>
-        <div className="text-xs text-zinc-500">{t("app.tagline")}</div>
-      </div>
+    <nav className="flex h-full flex-col gap-7 bg-rail px-4 py-6 text-rail-text" aria-label={t("sidebar.tables")}>
+      <Wordmark className="px-2 text-[28px] leading-none" />
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="mb-1 px-2 text-xs font-semibold tracking-wide text-zinc-400 uppercase">{t("sidebar.tables")}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mb-2 px-2 text-sm font-semibold text-rail-dim">{t("sidebar.tables")}</div>
         <ul className="space-y-0.5">
-          {tables.map((tbl) => (
-            <li key={tbl.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTable(tbl.id);
-                  onNavigate?.();
-                }}
-                className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm transition ${
-                  active?.id === tbl.id
-                    ? "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-500/15 dark:text-brand-100"
-                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                }`}
-              >
-                <span className="text-lg leading-none">{tbl.icon}</span>
-                <span className="min-w-0 flex-1 truncate">{tbl.name}</span>
-                <span className="text-xs text-zinc-400">{tbl.rows.length || ""}</span>
-              </button>
-            </li>
-          ))}
+          {tables.map((tbl) => {
+            const on = active?.id === tbl.id;
+            return (
+              <li key={tbl.id}>
+                <button
+                  type="button"
+                  aria-current={on ? "page" : undefined}
+                  onClick={() => {
+                    setActiveTable(tbl.id);
+                    onNavigate?.();
+                  }}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] transition ${
+                    on
+                      ? settings.accent
+                        ? "font-bold text-white"
+                        : "bg-white font-bold text-black"
+                      : "text-rail-text hover:bg-white/10"
+                  }`}
+                  style={on && settings.accent ? { background: settings.accent } : undefined}
+                >
+                  <span className={`h-2 w-2 shrink-0 ${on ? "bg-current" : "bg-rail-dim"}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate">{tbl.name}</span>
+                  <span className={`text-xs ${on ? "opacity-70" : "text-rail-dim"}`}>{tbl.rows.length || ""}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
         <button
           type="button"
           onClick={onNewTable}
-          className="mt-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-500/10"
+          className="mt-2 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] font-semibold text-rail-text hover:bg-white/10"
         >
-          <span className="text-lg leading-none">＋</span>
+          <span className="w-4 text-center">＋</span>
           {t("sidebar.newTable")}
         </button>
       </div>
 
-      <div className="space-y-2 rounded-2xl bg-zinc-100 p-3 dark:bg-zinc-900">
-        <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">{t("sidebar.settings")}</div>
-        <label className="flex items-center justify-between gap-2 text-sm">
-          <span>{t("settings.language")}</span>
-          <select className={`${inputClass} !w-36 !py-1.5`} value={settings.locale} onChange={(e) => changeLocale(e.target.value as Locale)}>
-            {LOCALES.map((l) => (
-              <option key={l} value={l}>
-                {LANGUAGE_NAMES[l]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center justify-between gap-2 text-sm">
-          <span>{t("settings.currency")}</span>
-          <select className={`${inputClass} !w-36 !py-1.5`} value={settings.currency} onChange={(e) => setSettings({ currency: e.target.value })}>
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <p className="px-2 text-xs text-zinc-400">🤖 {t("assistant.soon")}</p>
+      <details className="group rounded-xl border border-white/10">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-semibold text-rail-text">
+          {t("sidebar.settings")}
+          <span className="text-rail-dim transition group-open:rotate-180">⌄</span>
+        </summary>
+        <div className="space-y-3 px-3 pb-3">
+          <label className="block text-xs text-rail-dim">
+            {t("settings.language")}
+            <select className={`${railSelect} mt-1`} value={settings.locale} onChange={(e) => changeLocale(e.target.value as Locale)}>
+              {LOCALES.map((l) => (
+                <option key={l} value={l}>
+                  {LANGUAGE_NAMES[l]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-rail-dim">
+            {t("settings.currency")}
+            <select className={`${railSelect} mt-1`} value={settings.currency} onChange={(e) => setSettings({ currency: e.target.value })}>
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="text-xs text-rail-dim">
+            {t("settings.theme")}
+            <div className="mt-1 grid grid-cols-3 gap-1 rounded-lg border border-white/15 p-0.5">
+              {(["system", "light", "dark"] as Theme[]).map((th) => (
+                <button
+                  key={th}
+                  type="button"
+                  onClick={() => setSettings({ theme: th })}
+                  className={`rounded-md py-1 text-xs font-semibold ${settings.theme === th ? "bg-white text-black" : "text-rail-text hover:bg-white/10"}`}
+                >
+                  {t(`theme.${th}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-rail-dim">
+            {t("settings.accent")}
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSettings({ accent: null })}
+                title={t("accent.none")}
+                aria-label={t("accent.none")}
+                aria-pressed={settings.accent === null}
+                className={`h-6 w-6 rounded-full border-2 bg-[linear-gradient(135deg,#fff_50%,#000_50%)] ${settings.accent === null ? "border-white ring-2 ring-white/40" : "border-white/30"}`}
+              />
+              {ACCENTS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setSettings({ accent: c })}
+                  aria-label={c}
+                  aria-pressed={settings.accent === c}
+                  className={`h-6 w-6 rounded-full border-2 ${settings.accent === c ? "border-white ring-2 ring-white/40" : "border-transparent"}`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </details>
+      <p className="px-2 text-xs text-rail-dim">{t("sidebar.saved")}</p>
     </nav>
   );
 }

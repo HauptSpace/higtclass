@@ -103,6 +103,7 @@ describe("commands + ops", () => {
 
 describe("templates", () => {
   it.each(["ru", "uk", "en", "de", "es"] as const)("build cleanly in %s", (locale) => {
+    expect(TEMPLATES.length).toBeGreaterThanOrEqual(8);
     for (const tpl of TEMPLATES) {
       const res = createTable({ name: tpl.name[locale], icon: tpl.icon, columns: tpl.columns(locale) }, { locale });
       expect(res.problems).toEqual([]);

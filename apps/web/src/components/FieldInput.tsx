@@ -23,7 +23,7 @@ export function FieldInput({
 }) {
   const t = useT();
   const listId = useId();
-  const cls = compact ? `${inputClass} !rounded-lg !py-1.5` : inputClass;
+  const cls = compact ? `${inputClass} !rounded-lg !border-ink !py-1.5` : inputClass;
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && onEnter) {
       e.preventDefault();
@@ -40,7 +40,7 @@ export function FieldInput({
           aria-checked={value === "1"}
           autoFocus={autoFocus}
           onClick={() => onChange(value === "1" ? "" : "1")}
-          className={`relative h-7 w-12 rounded-full transition ${value === "1" ? "bg-brand-600" : "bg-zinc-300 dark:bg-zinc-700"}`}
+          className={`relative h-7 w-12 rounded-full transition ${value === "1" ? "bg-accent" : "bg-line"}`}
         >
           <span
             className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value === "1" ? "left-6" : "left-1"}`}
@@ -82,10 +82,10 @@ export function FieldInput({
                   key={o}
                   type="button"
                   onClick={() => onChange(o)}
-                  className={`rounded-full px-3 py-1 text-sm transition ${
+                  className={`rounded-full border-2 px-3 py-1 text-sm font-semibold transition ${
                     value.toLowerCase() === o.toLowerCase()
-                      ? "bg-brand-600 text-white"
-                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200"
+                      ? "border-ink bg-ink text-paper"
+                      : "border-line text-ink hover:border-ink"
                   }`}
                 >
                   {o}

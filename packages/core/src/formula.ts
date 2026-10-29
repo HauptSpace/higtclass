@@ -11,11 +11,10 @@ import type { CellValue, Column, Row, Table } from "./types.ts";
 export type FormulaErrorCode = "syntax" | "ref" | "cycle" | "div0" | "type";
 
 export class FormulaError extends Error {
-  constructor(
-    public code: FormulaErrorCode,
-    message: string,
-  ) {
+  code: FormulaErrorCode;
+  constructor(code: FormulaErrorCode, message: string) {
     super(message);
+    this.code = code;
   }
 }
 
@@ -103,7 +102,10 @@ const FALSE_IDS = ["FALSE", "ЛОЖЬ", "ХИБНІСТЬ", "FALSCH", "FALSO"];
 
 class Parser {
   private i = 0;
-  constructor(private tokens: Token[]) {}
+  private tokens: Token[];
+  constructor(tokens: Token[]) {
+    this.tokens = tokens;
+  }
 
   parse(): Node {
     const n = this.comparison();

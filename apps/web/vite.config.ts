@@ -6,5 +6,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Relative paths so the same build works on a website and inside the Tauri .exe.
   base: "./",
-  server: { host: true },
+  server: {
+    host: true,
+    proxy: { "/api": process.env.ZIFRA_API ?? "http://localhost:8787" },
+  },
 });

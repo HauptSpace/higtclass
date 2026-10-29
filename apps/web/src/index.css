@@ -1,16 +1,64 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+/* Zifra: black and white, Swiss. Colour appears only where it means something
+   (statuses) or where the company chose its own accent. */
+
+@theme inline {
+  --font-sans: "Golos Text", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Unbounded", "Golos Text", ui-sans-serif, sans-serif;
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-rule: var(--rule);
+  --color-line: var(--line);
+  --color-soft: var(--soft);
+  --color-rail: var(--rail);
+  --color-rail-text: var(--rail-text);
+  --color-rail-dim: var(--rail-dim);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-paid: var(--paid);
+  --color-wait: var(--wait);
+  --color-late: var(--late);
+  --color-work: var(--work);
 }
 
 :root {
-  color-scheme: light dark;
+  --paper: #ffffff;
+  --ink: #111111;
+  --ink-2: #6b6b6b;
+  --rule: #111111;
+  --line: #e6e6e6;
+  --soft: #f4f4f4;
+  --rail: #0e0e0f;
+  --rail-text: #f5f5f5;
+  --rail-dim: #8a8a8a;
+  --accent: #111111;
+  --on-accent: #ffffff;
+  --paid: #1f8a55;
+  --wait: #d99a00;
+  --late: #e5452b;
+  --work: #2f5bd3;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --paper: #0e0e0f;
+  --ink: #f2f2f2;
+  --ink-2: #9a9a9a;
+  --rule: #f2f2f2;
+  --line: #262628;
+  --soft: #18181a;
+  --rail: #000000;
+  --rail-text: #f5f5f5;
+  --rail-dim: #7d7d7d;
+  --accent: #f2f2f2;
+  --on-accent: #0e0e0f;
+  --paid: #3fbf7f;
+  --wait: #f0b429;
+  --late: #ff6a52;
+  --work: #6d8cff;
+  color-scheme: dark;
 }
 
 html,
@@ -20,17 +68,39 @@ body,
 }
 
 body {
-  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  @apply bg-paper font-sans text-ink antialiased;
+  font-variant-numeric: tabular-nums;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Hide number spinners: numbers are typed, not clicked. */
+:focus-visible {
+  outline: 3px solid var(--work);
+  outline-offset: 2px;
+}
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.tabular {
-  font-variant-numeric: tabular-nums;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--late) 45%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+.listening {
+  animation: pulse-ring 1.2s ease-out infinite;
 }

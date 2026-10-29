@@ -120,14 +120,14 @@ export function RecordDialog({
             const c = computed[col.id];
             return (
               <Label key={col.id} text={col.name}>
-                <div className="tabular rounded-xl bg-zinc-100 px-3 py-2.5 text-sm dark:bg-zinc-800">
+                <div className="rounded-xl bg-soft px-3.5 py-2.5 font-bold">
                   {c && "value" in c ? formatValue(displayColumn(table, col), c.value, settings) : c ? t(`formula.${c.error}`) : ""}
                 </div>
               </Label>
             );
           }
           return (
-            <div key={col.id} className={bad.has(col.id) ? "rounded-xl ring-2 ring-red-400 ring-offset-4 dark:ring-offset-zinc-900" : ""}>
+            <div key={col.id} className={bad.has(col.id) ? "rounded-xl outline-2 outline-offset-4 outline-late" : ""}>
               <Label text={col.name}>
                 <FieldInput
                   column={col}
@@ -141,7 +141,7 @@ export function RecordDialog({
           );
         })}
         {problems.length > 0 && (
-          <ul className="space-y-1 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+          <ul className="space-y-1 border-l-4 border-late pl-3 font-semibold text-late">
             {problems.map((p, i) => (
               <li key={i}>{problemText(t, p)}</li>
             ))}

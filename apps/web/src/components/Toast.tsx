@@ -16,16 +16,13 @@ export function Toast() {
 
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-6">
-      <div
-        key={toast.id}
-        className="pointer-events-auto flex max-w-md items-center gap-4 rounded-2xl bg-zinc-900 px-4 py-3 text-sm text-white shadow-xl dark:bg-zinc-100 dark:text-zinc-900"
-      >
+    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-8" role="status">
+      <div key={toast.id} className="pointer-events-auto flex max-w-md items-center gap-5 rounded-xl bg-ink px-5 py-3.5 font-semibold text-paper shadow-2xl">
         <span>{toast.text}</span>
         {toast.undoable && (
           <button
             type="button"
-            className="font-semibold text-brand-100 dark:text-brand-700"
+            className="font-extrabold underline underline-offset-4"
             onClick={() => {
               undo();
               hide();

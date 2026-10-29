@@ -3,8 +3,10 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
-    "dev": "pnpm --filter @higtclass/web dev",
-    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @higtclass/web --filter @higtclass/api dev",
+    "dev:web": "pnpm --filter @higtclass/web dev",
+    "dev:api": "pnpm --filter @higtclass/api dev",
+    "build": "pnpm --filter @higtclass/web build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }

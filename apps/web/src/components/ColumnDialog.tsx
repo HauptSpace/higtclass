@@ -154,20 +154,20 @@ export function ColumnDialog({
           <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </Label>
         <div>
-          <span className="mb-1 block text-sm font-medium text-zinc-600 dark:text-zinc-300">{t("column.type")}</span>
+          <span className="mb-1.5 block text-sm font-semibold text-ink-2">{t("column.type")}</span>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {COLUMN_TYPES.map((ct) => (
               <button
                 key={ct}
                 type="button"
                 onClick={() => setType(ct)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition ${
+                className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-left text-sm font-semibold transition ${
                   type === ct
-                    ? "bg-brand-600 text-white"
-                    : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                    ? "border-ink bg-ink text-paper"
+                    : "border-line text-ink hover:border-ink"
                 }`}
               >
-                <span className="w-5 text-center font-mono text-xs opacity-80">{TYPE_ICONS[ct]}</span>
+                <span className="w-5 text-center text-xs opacity-70">{TYPE_ICONS[ct]}</span>
                 {t(`type.${ct}`)}
               </button>
             ))}
@@ -195,7 +195,7 @@ export function ColumnDialog({
             text={t("column.formula")}
             hint={
               formulaError ? (
-                <span className="text-red-600 dark:text-red-400">{formulaError}</span>
+                <span className="font-semibold text-late">{formulaError}</span>
               ) : preview !== null ? (
                 `${t("column.preview")}: ${preview}`
               ) : (
@@ -217,7 +217,7 @@ export function ColumnDialog({
                     key={c.id}
                     type="button"
                     onClick={() => setFormula((f) => `${f}${f && !f.endsWith(" ") ? " " : ""}[${c.name}]`)}
-                    className="rounded-lg bg-zinc-100 px-2 py-1 font-mono text-xs text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200"
+                    className="rounded-lg border-2 border-line px-2 py-0.5 text-sm font-semibold hover:border-ink"
                   >
                     [{c.name}]
                   </button>

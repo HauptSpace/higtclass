@@ -6,3 +6,4 @@ export * from "./ops.ts";
 export * from "./commands.ts";
 export * from "./aggregate.ts";
 export * from "./templates.ts";
+export * from "./context.ts";
