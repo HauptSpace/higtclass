@@ -38,6 +38,8 @@ interface State {
   ws: Workspace;
   settings: AppSettings;
   activeTableId: string | null;
+  /** When set, the report is shown instead of a table. */
+  activeReportId: string | null;
   past: HistoryEntry[];
   future: HistoryEntry[];
   toast: Toast | null;
@@ -46,6 +48,7 @@ interface State {
   undo: () => void;
   redo: () => void;
   setActiveTable: (id: string | null) => void;
+  openReport: (id: string | null) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
   showToast: (text: string, undoable?: boolean) => void;
   hideToast: () => void;
@@ -92,6 +95,7 @@ export const useStore = create<State>()(
       ws: { tables: [] },
       settings: initialSettings(),
       activeTableId: null,
+      activeReportId: null,
       past: [],
       future: [],
       toast: null,
@@ -141,7 +145,11 @@ export const useStore = create<State>()(
       },
 
       setActiveTable(id) {
-        setState({ activeTableId: id });
+        setState({ activeTableId: id, activeReportId: null });
+      },
+
+      openReport(id) {
+        setState({ activeReportId: id });
       },
 
       setSettings(patch) {
@@ -165,7 +173,7 @@ export const useStore = create<State>()(
         return state as State;
       },
       storage: createJSONStorage(() => idbStorage),
-      partialize: (s) => ({ ws: s.ws, settings: s.settings, activeTableId: s.activeTableId }),
+      partialize: (s) => ({ ws: s.ws, settings: s.settings, activeTableId: s.activeTableId, activeReportId: s.activeReportId }),
     },
   ),
 );

@@ -7,3 +7,5 @@ export * from "./commands.ts";
 export * from "./aggregate.ts";
 export * from "./templates.ts";
 export * from "./context.ts";
+export * from "./links.ts";
+export * from "./infer.ts";

@@ -1,4 +1,4 @@
-import type { CellValue, Column, Row, Table } from "./types.ts";
+import type { CellValue, Column, Row, Table, Workspace } from "./types.ts";
 
 // Row-level formulas that reference columns by name: `[Цена] * [Кол-во]`.
 // A formula is written once per column and applies to every row, so there is
@@ -265,7 +265,16 @@ export function findColumnByName(columns: Column[], name: string): Column | unde
  * How a formula column should be displayed: a formula built on a money column
  * is shown as money in that column's currency.
  */
-export function displayColumn(table: Table, column: Column): Column {
+export function displayColumn(table: Table, column: Column, ws?: Workspace, depth = 0): Column {
+  if (column.type === "lookup") {
+    // Shown like the column it looks up, under its own name.
+    const via = table.columns.find((c) => c.id === column.lookup?.viaColumnId);
+    const target = ws?.tables.find((t) => t.id === via?.linkTableId);
+    const targetCol = target?.columns.find((c) => c.id === column.lookup?.columnId);
+    if (!target || !targetCol || depth >= MAX_LOOKUP_DEPTH) return column;
+    const shown = displayColumn(target, targetCol, ws, depth + 1);
+    return { ...shown, id: column.id, name: column.name };
+  }
   if (column.type !== "formula" || !column.formula) return column;
   const money = formulaRefs(column.formula)
     .map((name) => findColumnByName(table.columns, name))
@@ -391,13 +400,37 @@ function evaluate(n: Node, ctx: EvalContext): Value {
 
 export type ComputedCell = { value: CellValue } | { error: FormulaErrorCode };
 
+/** The table a link column points to and the row a cell links to, if both still exist. */
+export function resolveLink(ws: Workspace | undefined, column: Column, value: CellValue | undefined) {
+  if (!ws || column.type !== "link" || typeof value !== "string") return null;
+  const table = ws.tables.find((t) => t.id === column.linkTableId);
+  const row = table?.rows.find((r) => r.id === value);
+  return table && row ? { table, row } : null;
+}
+
+const MAX_LOOKUP_DEPTH = 4;
+
 /**
- * Computes every formula column of one row. Formulas may reference other
- * formula columns; cycles are reported as errors instead of hanging.
+ * Computes every formula and lookup column of one row. Formulas may reference
+ * other computed columns; cycles are reported as errors instead of hanging.
+ * Lookups need the workspace to reach the linked table.
  */
-export function computeRow(table: Table, row: Row, today: string): Record<string, ComputedCell> {
+export function computeRow(table: Table, row: Row, today: string, ws?: Workspace, depth = 0): Record<string, ComputedCell> {
   const out: Record<string, ComputedCell> = {};
   const visiting = new Set<string>();
+
+  const lookupValue = (col: Column): ComputedCell => {
+    const via = table.columns.find((c) => c.id === col.lookup?.viaColumnId);
+    if (!via || via.type !== "link") return { error: "ref" };
+    const target = ws?.tables.find((t) => t.id === via.linkTableId);
+    const targetCol = target?.columns.find((c) => c.id === col.lookup?.columnId);
+    if (!target || !targetCol) return { error: "ref" };
+    const linked = target.rows.find((r) => r.id === row.values[via.id]);
+    if (!linked) return { value: null };
+    if (targetCol.type !== "formula" && targetCol.type !== "lookup") return { value: linked.values[targetCol.id] ?? null };
+    if (depth >= MAX_LOOKUP_DEPTH) return { error: "cycle" };
+    return computeRow(target, linked, today, ws, depth + 1)[targetCol.id] ?? { value: null };
+  };
 
   const computeColumn = (col: Column): ComputedCell => {
     const done = out[col.id];
@@ -405,35 +438,39 @@ export function computeRow(table: Table, row: Row, today: string): Record<string
     if (visiting.has(col.id)) return { error: "cycle" };
     visiting.add(col.id);
     let result: ComputedCell;
-    try {
-      const ast = compile(col.formula ?? "");
-      const value = evaluate(ast, {
-        today,
-        resolve(name) {
-          const ref = findColumnByName(table.columns, name);
-          if (!ref) throw new FormulaError("ref", `No column "${name}"`);
-          if (ref.type !== "formula") return row.values[ref.id] ?? null;
-          const inner = computeColumn(ref);
-          if ("error" in inner) throw new FormulaError(inner.error, "Upstream error");
-          return inner.value;
-        },
-      });
-      result = { value: typeof value === "number" && !Number.isFinite(value) ? null : value };
-    } catch (e) {
-      result = { error: e instanceof FormulaError ? e.code : "syntax" };
+    if (col.type === "lookup") {
+      result = lookupValue(col);
+    } else {
+      try {
+        const ast = compile(col.formula ?? "");
+        const value = evaluate(ast, {
+          today,
+          resolve(name) {
+            const ref = findColumnByName(table.columns, name);
+            if (!ref) throw new FormulaError("ref", `No column "${name}"`);
+            if (ref.type !== "formula" && ref.type !== "lookup") return row.values[ref.id] ?? null;
+            const inner = computeColumn(ref);
+            if ("error" in inner) throw new FormulaError(inner.error, "Upstream error");
+            return inner.value;
+          },
+        });
+        result = { value: typeof value === "number" && !Number.isFinite(value) ? null : value };
+      } catch (e) {
+        result = { error: e instanceof FormulaError ? e.code : "syntax" };
+      }
     }
     visiting.delete(col.id);
     out[col.id] = result;
     return result;
   };
 
-  for (const col of table.columns) if (col.type === "formula") computeColumn(col);
+  for (const col of table.columns) if (col.type === "formula" || col.type === "lookup") computeColumn(col);
   return out;
 }
 
 /** Stored values plus computed formula values for one row (errors become null). */
-export function rowValues(table: Table, row: Row, today: string): Record<string, CellValue> {
-  const computed = computeRow(table, row, today);
+export function rowValues(table: Table, row: Row, today: string, ws?: Workspace): Record<string, CellValue> {
+  const computed = computeRow(table, row, today, ws);
   const values = { ...row.values };
   for (const [id, cell] of Object.entries(computed)) values[id] = "value" in cell ? cell.value : null;
   return values;

@@ -2,6 +2,8 @@ import { CURRENCIES, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core"
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
 import { useActiveTable, useStore, type Theme } from "../store.ts";
 
+const NO_REPORTS: never[] = [];
+
 export const ACCENTS = ["#E5352B", "#1F4FE0", "#FF7A1A", "#6D4AFF", "#7A4B2A", "#E2457A"];
 
 export function Wordmark({ className = "" }: { className?: string }) {
@@ -11,13 +13,27 @@ export function Wordmark({ className = "" }: { className?: string }) {
 const railSelect =
   "w-full rounded-lg border border-white/15 bg-transparent px-2 py-1.5 text-sm text-rail-text outline-none focus:border-white/60 [&>option]:text-black";
 
-export function Sidebar({ onNewTable, onNavigate }: { onNewTable: () => void; onNavigate?: () => void }) {
+export function Sidebar({
+  onNewTable,
+  onImport,
+  onNewReport,
+  onNavigate,
+}: {
+  onNewTable: () => void;
+  onImport: () => void;
+  onNewReport: () => void;
+  onNavigate?: () => void;
+}) {
   const t = useT();
   const tables = useStore((s) => s.ws.tables);
   const active = useActiveTable();
   const settings = useStore((s) => s.settings);
   const setSettings = useStore((s) => s.setSettings);
   const setActiveTable = useStore((s) => s.setActiveTable);
+  const reports = useStore((s) => s.ws.reports) ?? NO_REPORTS;
+  const activeReportId = useStore((s) => s.activeReportId);
+  const openReport = useStore((s) => s.openReport);
+  const sideButton = "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] text-rail-text hover:bg-white/10";
 
   const changeLocale = (locale: Locale) => {
     // The currency follows the language only if the person never picked their own.
@@ -33,7 +49,7 @@ export function Sidebar({ onNewTable, onNavigate }: { onNewTable: () => void; on
         <div className="mb-2 px-2 text-sm font-semibold text-rail-dim">{t("sidebar.tables")}</div>
         <ul className="space-y-0.5">
           {tables.map((tbl) => {
-            const on = active?.id === tbl.id;
+            const on = !activeReportId && active?.id === tbl.id;
             return (
               <li key={tbl.id}>
                 <button
@@ -68,6 +84,46 @@ export function Sidebar({ onNewTable, onNavigate }: { onNewTable: () => void; on
           <span className="w-4 text-center">＋</span>
           {t("sidebar.newTable")}
         </button>
+        <button type="button" onClick={onImport} className={sideButton}>
+          <span className="w-4 text-center">↥</span>
+          {t("sidebar.import")}
+        </button>
+
+        {tables.length > 0 && (
+          <>
+            <div className="mt-6 mb-2 px-2 text-sm font-semibold text-rail-dim">{t("sidebar.reports")}</div>
+            <ul className="space-y-0.5">
+              {reports.map((r) => {
+                const on = activeReportId === r.id;
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      aria-current={on ? "page" : undefined}
+                      onClick={() => {
+                        openReport(r.id);
+                        onNavigate?.();
+                      }}
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] transition ${
+                        on ? (settings.accent ? "font-bold text-white" : "bg-white font-bold text-black") : "text-rail-text hover:bg-white/10"
+                      }`}
+                      style={on && settings.accent ? { background: settings.accent } : undefined}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0 opacity-80">
+                        <path d="M2 14h12M4 11V7M8 11V3M12 11V5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                      </svg>
+                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <button type="button" onClick={onNewReport} className={`${sideButton} mt-1 font-semibold`}>
+              <span className="w-4 text-center">＋</span>
+              {t("sidebar.newReport")}
+            </button>
+          </>
+        )}
       </div>
 
       <details className="group rounded-xl border border-white/10">

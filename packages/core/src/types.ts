@@ -12,7 +12,9 @@ export type ColumnType =
   | "date"
   | "select"
   | "checkbox"
-  | "formula";
+  | "formula"
+  | "link"
+  | "lookup";
 
 export const COLUMN_TYPES: ColumnType[] = [
   "text",
@@ -22,6 +24,8 @@ export const COLUMN_TYPES: ColumnType[] = [
   "select",
   "checkbox",
   "formula",
+  "link",
+  "lookup",
 ];
 
 export interface Column {
@@ -34,6 +38,10 @@ export interface Column {
   formula?: string;
   /** ISO 4217 code for `money` columns; falls back to the workspace currency. */
   currency?: string;
+  /** For `link` columns: the table whose rows this column points to. Cells hold row ids. */
+  linkTableId?: string;
+  /** For `lookup` columns: show `columnId` of the row linked through `viaColumnId`. */
+  lookup?: { viaColumnId: string; columnId: string };
 }
 
 /** Stored cell value. Dates are `YYYY-MM-DD` strings, money is a plain number. */
@@ -55,8 +63,23 @@ export interface Table {
   rows: Row[];
 }
 
+/** A saved chart over one table. */
+export interface Report {
+  id: string;
+  name: string;
+  tableId: string;
+  /** What to count: a numeric column summed/averaged, or just the number of rows. */
+  measure: { agg: "sum" | "avg" | "count"; columnId: string | null };
+  /** How to split it: by a column's values, or by month of a date column. */
+  groupBy: { kind: "column" | "month"; columnId: string };
+  chart: "bars" | "columns" | "line";
+  /** Show only the N largest groups (bars); 0 = all. */
+  limit: number;
+}
+
 export interface Workspace {
   tables: Table[];
+  reports?: Report[];
 }
 
 export interface Settings {
@@ -65,3 +88,6 @@ export interface Settings {
 }
 
 export const NUMERIC_TYPES: ColumnType[] = ["number", "money", "formula"];
+
+/** Columns whose values are computed, never typed in. */
+export const COMPUTED_TYPES: ColumnType[] = ["formula", "lookup"];

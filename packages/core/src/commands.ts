@@ -1,6 +1,7 @@
 import { findColumnByName, validateFormula } from "./formula.ts";
+import { matchLinkTarget, rowLabel } from "./links.ts";
 import type { CellChange, Op } from "./ops.ts";
-import type { CellValue, Column, ColumnType, Locale, Row, Table } from "./types.ts";
+import type { CellValue, Column, ColumnType, Locale, Row, Table, Workspace } from "./types.ts";
 import { convertValue, parseValue } from "./values.ts";
 
 // User-level actions built on top of operations. Commands take raw input
@@ -10,6 +11,8 @@ import { convertValue, parseValue } from "./values.ts";
 export interface CommandContext {
   locale: Locale;
   now?: Date;
+  /** Needed to resolve linked-table values ("Альфа" → the Alpha row in Clients). */
+  ws?: Workspace;
 }
 
 export interface ColumnDraft {
@@ -18,6 +21,8 @@ export interface ColumnDraft {
   options?: string[];
   formula?: string;
   currency?: string;
+  linkTableId?: string;
+  lookup?: { viaColumnId: string; columnId: string };
 }
 
 export interface Problem {
@@ -39,6 +44,7 @@ export const newId = {
   table: () => randomId("t_"),
   column: () => randomId("c_"),
   row: () => randomId("r_"),
+  report: () => randomId("p_"),
 };
 
 function uniqueName(name: string, taken: string[]): string {
@@ -64,6 +70,8 @@ export function buildColumn(draft: ColumnDraft, taken: string[]): { column: Colu
       problems.push({ column: column.name, input: draft.formula, reason: "invalid_formula" });
     }
   }
+  if (draft.type === "link") column.linkTableId = draft.linkTableId;
+  if (draft.type === "lookup" && draft.lookup) column.lookup = { ...draft.lookup };
   return { column, problems };
 }
 
@@ -105,11 +113,12 @@ function parseRecords(
         problems.push({ column: key, input: raw, reason: "unknown_column" });
         continue;
       }
-      if (col.type === "formula") {
+      if (col.type === "formula" || col.type === "lookup") {
         problems.push({ columnId: col.id, column: col.name, input: raw, reason: "formula_column" });
         continue;
       }
-      const v = parseValue(col, raw, ctx.locale, ctx.now);
+      let v = parseValue(col, raw, ctx.locale, ctx.now);
+      if (col.type === "link" && typeof v === "string") v = matchLinkTarget(ctx.ws, col, v) ?? undefined;
       if (v === undefined) {
         problems.push({ columnId: col.id, column: col.name, input: raw, reason: "invalid_value" });
         continue;
@@ -210,7 +219,7 @@ export function updateCells(
   const cells: CellChange[] = [];
   valid.forEach((u, i) => {
     const col = resolveColumn(table.columns, u.column);
-    if (!col || col.type === "formula") return;
+    if (!col || col.type === "formula" || col.type === "lookup") return;
     const rawEmpty = u.value === null || u.value === undefined || String(u.value).trim() === "";
     if (col.id in parsed.values[i]) cells.push({ rowId: u.rowId, columnId: col.id, value: parsed.values[i][col.id] });
     else if (rawEmpty) cells.push({ rowId: u.rowId, columnId: col.id, value: null });
@@ -226,7 +235,7 @@ export function changeColumnType(
   columnId: string,
   type: ColumnType,
   ctx: CommandContext,
-  extra: { options?: string[]; formula?: string } = {},
+  extra: { options?: string[]; formula?: string; linkTableId?: string; lookup?: Column["lookup"] } = {},
 ): CommandResult {
   const col = table.columns.find((c) => c.id === columnId);
   if (!col) return { op: { type: "batch", ops: [] }, problems: [{ columnId, reason: "unknown_column" }] };
@@ -245,12 +254,24 @@ export function changeColumnType(
       problems.push({ columnId, column: col.name, input: patch.formula, reason: "invalid_formula" });
     }
   }
+  if (type === "link") patch.linkTableId = extra.linkTableId ?? col.linkTableId;
+  if (type === "lookup") patch.lookup = extra.lookup ?? col.lookup;
+  const next: Column = { ...target, ...patch } as Column;
+  // A link shows a name; converting away from it keeps that name, converting to it
+  // finds the row with that name ("ООО Альфа" text → the Alpha client).
+  const linkedFrom = col.type === "link" ? ctx.ws?.tables.find((t) => t.id === col.linkTableId) : undefined;
   const cells: CellChange[] = [];
   for (const r of table.rows) {
     const v = r.values[columnId];
     if (v === undefined) continue;
-    const next = convertValue(v, { ...target, ...patch } as Column, ctx.locale);
-    if (next !== v) cells.push({ rowId: r.id, columnId, value: next });
+    let source: CellValue = v;
+    if (col.type === "link") {
+      const linkedRow = linkedFrom?.rows.find((x) => x.id === v);
+      source = linkedRow && linkedFrom ? rowLabel(linkedFrom, linkedRow) : null;
+    }
+    const converted =
+      type === "link" ? (source === null ? null : matchLinkTarget(ctx.ws, next, source)) : convertValue(source, next, ctx.locale);
+    if (converted !== v) cells.push({ rowId: r.id, columnId, value: converted });
   }
   const ops: Op[] = [];
   if (cells.length) ops.push({ type: "cells.set", tableId: table.id, cells });

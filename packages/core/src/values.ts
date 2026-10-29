@@ -127,9 +127,12 @@ export function parseValue(
       v = parseBoolean(raw, locale);
       break;
     case "formula":
+    case "lookup":
       return undefined;
     case "text":
     case "select":
+    case "link":
+      // Links are resolved to row ids by the commands, which can see the target table.
       return String(raw).trim();
   }
   return v === null ? undefined : v;
@@ -138,7 +141,7 @@ export function parseValue(
 /** Re-interpret an already stored value after a column changes type. */
 export function convertValue(value: CellValue, to: Column, locale: Locale): CellValue {
   if (value === null) return null;
-  if (to.type === "formula") return null;
+  if (to.type === "formula" || to.type === "lookup") return null;
   if (typeof value === "boolean" && (to.type === "text" || to.type === "select")) {
     return value ? LOCALE_RULES[locale].trueWords[0] : LOCALE_RULES[locale].falseWords[0];
   }

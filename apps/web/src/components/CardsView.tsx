@@ -1,4 +1,4 @@
-import { computeRow, displayColumn, formatValue, type Row, type Table } from "@higtclass/core";
+import { cellText, computeRow, type Row, type Table } from "@higtclass/core";
 import { useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { StatusMark } from "./GridView.tsx";
@@ -8,8 +8,11 @@ import { StatusMark } from "./GridView.tsx";
 
 export function CardsView({ table, rows, onOpenRow }: { table: Table; rows: Row[]; onOpenRow: (id: string) => void }) {
   const settings = useStore((s) => s.settings);
+  const ws = useStore((s) => s.ws);
   const today = useToday();
-  const titleCol = table.columns.find((c) => c.type === "text") ?? table.columns.find((c) => c.type === "select");
+  const show = (c: Table["columns"][number], v: Parameters<typeof cellText>[3]) => cellText(ws, table, c, v, settings);
+  const titleCol =
+    table.columns.find((c) => c.type === "text") ?? table.columns.find((c) => c.type === "link") ?? table.columns.find((c) => c.type === "select");
   const amountCol =
     table.columns.find((c) => c.type === "money") ??
     table.columns.find((c) => c.type === "formula") ??
@@ -20,7 +23,7 @@ export function CardsView({ table, rows, onOpenRow }: { table: Table; rows: Row[
   return (
     <ul>
       {rows.map((row) => {
-        const computed = computeRow(table, row, today);
+        const computed = computeRow(table, row, today, ws);
         const value = (id: string) => {
           const c = computed[id];
           if (c) return "value" in c ? c.value : null;
@@ -29,7 +32,7 @@ export function CardsView({ table, rows, onOpenRow }: { table: Table; rows: Row[
         const status = statusCol ? value(statusCol.id) : null;
         const details = rest
           .map((c) => {
-            const text = formatValue(displayColumn(table, c), value(c.id), settings);
+            const text = show(c, value(c.id));
             if (!text) return null;
             return c.type === "checkbox" ? c.name : c.type === "date" ? text : `${c.name}: ${text}`;
           })
@@ -38,10 +41,10 @@ export function CardsView({ table, rows, onOpenRow }: { table: Table; rows: Row[
           <li key={row.id}>
             <button type="button" onClick={() => onOpenRow(row.id)} className="grid w-full grid-cols-[1fr_auto] gap-x-4 border-b border-line py-4 text-left active:bg-soft">
               <span className="min-w-0 truncate text-[17px] font-bold">
-                {titleCol ? formatValue(titleCol, value(titleCol.id), settings) || "—" : "—"}
+                {titleCol ? show(titleCol, value(titleCol.id)) || "—" : "—"}
               </span>
               <span className="text-right text-[17px] font-extrabold">
-                {amountCol ? formatValue(displayColumn(table, amountCol), value(amountCol.id), settings) : ""}
+                {amountCol ? show(amountCol, value(amountCol.id)) : ""}
               </span>
               <span className="min-w-0 truncate text-ink-2">{details.join(" · ")}</span>
               <span className="text-right text-sm">{typeof status === "string" && <StatusMark value={status} />}</span>

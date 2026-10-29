@@ -10,7 +10,7 @@ import {
 } from "@higtclass/core";
 import { useState } from "react";
 import { useT } from "../i18n/index.ts";
-import { draftOf, problemText, useToday } from "../lib.ts";
+import { draftOf, problemText, useCellText, useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { FieldInput } from "./FieldInput.tsx";
 import { statusColor } from "./ui.tsx";
@@ -48,8 +48,10 @@ export function GridView({
   const t = useT();
   const today = useToday();
   const settings = useStore((s) => s.settings);
+  const ws = useStore((s) => s.ws);
   const dispatch = useStore((s) => s.dispatch);
   const showToast = useStore((s) => s.showToast);
+  const text = useCellText();
   const [editing, setEditing] = useState<{ rowId: string; columnId: string; draft: string } | null>(null);
   const position = new Map(table.rows.map((r, i) => [r.id, i + 1]));
 
@@ -57,6 +59,7 @@ export function GridView({
     if (!editing) return;
     const res = updateCells(table, [{ rowId: editing.rowId, column: editing.columnId, value: value ?? editing.draft }], {
       locale: settings.locale,
+      ws,
     });
     setEditing(null);
     if (res.problems.length) return showToast(problemText(t, res.problems[0]), false);
@@ -102,7 +105,7 @@ export function GridView({
         </thead>
         <tbody>
           {rows.map((row) => {
-            const computed = computeRow(table, row, today);
+            const computed = computeRow(table, row, today, ws);
             return (
               <tr key={row.id} className="group hover:bg-soft">
                 <td className="border-b border-line py-3.5 pr-2 text-sm text-ink-2">
@@ -112,14 +115,14 @@ export function GridView({
                   </button>
                 </td>
                 {table.columns.map((col) => {
-                  const numeric = NUMERIC_TYPES.includes(col.type);
+                  const numeric = NUMERIC_TYPES.includes(displayColumn(table, col, ws).type);
                   const base = `border-b border-line px-3 py-3.5 ${numeric ? "text-right font-bold" : ""}`;
-                  if (col.type === "formula") {
+                  if (col.type === "formula" || col.type === "lookup") {
                     const c = computed[col.id];
                     return (
                       <td key={col.id} className={base}>
                         {c && "value" in c ? (
-                          formatValue(displayColumn(table, col), c.value, settings)
+                          formatValue(displayColumn(table, col, ws), c.value, settings)
                         ) : (
                           <span className="text-sm font-semibold text-late">{c ? t(`formula.${c.error}`) : ""}</span>
                         )}
@@ -159,10 +162,12 @@ export function GridView({
                       className={`${base} cursor-text ${col.type === "text" && col === table.columns.find((c) => c.type === "text") ? "font-bold" : ""}`}
                       onClick={() => setEditing({ rowId: row.id, columnId: col.id, draft: draftOf(col, row.values[col.id], settings.locale) })}
                     >
-                      {col.type === "select" && typeof value === "string" ? (
+                      {col.type === "link" ? (
+                        <span className="font-semibold underline decoration-line decoration-2 underline-offset-4">{text(table, col, value)}</span>
+                      ) : col.type === "select" && typeof value === "string" ? (
                         <StatusMark value={value} />
                       ) : (
-                        formatValue(col, value, settings) || <span className="text-transparent">·</span>
+                        text(table, col, value) || <span className="text-transparent">·</span>
                       )}
                     </td>
                   );
@@ -177,12 +182,12 @@ export function GridView({
             <td className="border-t-2 border-rule py-3 text-sm font-semibold text-ink-2">Σ</td>
             {table.columns.map((col) => {
               const s = summary[col.id];
-              let text = "";
-              if (s?.sum !== undefined) text = formatValue(displayColumn(table, col), s.sum, settings);
-              else if (col.type === "checkbox" && s) text = t("figures.of", { a: s.checked ?? 0, b: rows.length });
+              let footer = "";
+              if (s?.sum !== undefined) footer = formatValue(displayColumn(table, col, ws), s.sum, settings);
+              else if (col.type === "checkbox" && s) footer = t("figures.of", { a: s.checked ?? 0, b: rows.length });
               return (
                 <td key={col.id} className={`border-t-2 border-rule px-3 py-3 font-extrabold ${NUMERIC_TYPES.includes(col.type) ? "text-right" : ""}`}>
-                  {text}
+                  {footer}
                 </td>
               );
             })}

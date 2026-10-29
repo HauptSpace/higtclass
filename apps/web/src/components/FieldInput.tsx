@@ -1,6 +1,7 @@
-import type { Column } from "@higtclass/core";
+import { rowLabel, type Column } from "@higtclass/core";
 import { useId } from "react";
 import { useT } from "../i18n/index.ts";
+import { useStore } from "../store.ts";
 import { inputClass } from "./ui.tsx";
 
 // One input per column type. Values are kept as the text the user typed and
@@ -22,6 +23,7 @@ export function FieldInput({
   compact?: boolean;
 }) {
   const t = useT();
+  const ws = useStore((s) => s.ws);
   const listId = useId();
   const cls = compact ? `${inputClass} !rounded-lg !border-ink !py-1.5` : inputClass;
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -32,6 +34,22 @@ export function FieldInput({
   };
 
   switch (column.type) {
+    case "link": {
+      const target = ws.tables.find((tb) => tb.id === column.linkTableId);
+      const options = (target?.rows ?? [])
+        .map((r) => ({ id: r.id, label: rowLabel(target!, r) }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+      return (
+        <select className={cls} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} autoFocus={autoFocus}>
+          <option value="">{t("column.pickRow")}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
     case "checkbox":
       return (
         <button

@@ -3,7 +3,6 @@ import {
   displayColumn,
   formatNumber,
   formatValue,
-  NUMERIC_TYPES,
   summarizeTable,
   type CellValue,
   type Column,
@@ -11,7 +10,8 @@ import {
 } from "@higtclass/core";
 import { useMemo, useState } from "react";
 import { useT } from "../i18n/index.ts";
-import { useIsMobile, useToday } from "../lib.ts";
+import { exportCsv, exportXlsx } from "../exporter.ts";
+import { useCellText, useIsMobile, useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { AssistantBar } from "./AssistantBar.tsx";
 import { CardsView } from "./CardsView.tsx";
@@ -50,7 +50,9 @@ export function TableView({ table }: { table: Table }) {
   const today = useToday();
   const mobile = useIsMobile();
   const settings = useStore((s) => s.settings);
+  const ws = useStore((s) => s.ws);
   const dispatch = useStore((s) => s.dispatch);
+  const text = useCellText();
 
   const dateCol = table.columns.find((c) => c.type === "date") ?? null;
   const [period, setPeriod] = useState<Period>("all");
@@ -63,30 +65,30 @@ export function TableView({ table }: { table: Table }) {
 
   // Rows in the chosen period, with formula values computed once.
   const scoped = useMemo(() => {
-    const all = computedRows(table, today);
+    const all = computedRows(table, today, ws);
     const keep = table.rows.map((_, i) => !dateCol || inPeriod(all[i][dateCol.id], period, today));
     return {
       table: { ...table, rows: table.rows.filter((_, i) => keep[i]) },
       values: all.filter((_, i) => keep[i]),
       all,
     };
-  }, [table, today, period, dateCol]);
+  }, [table, today, period, dateCol, ws]);
 
-  const summary = useMemo(() => summarizeTable(scoped.table, today), [scoped, today]);
+  const summary = useMemo(() => summarizeTable(scoped.table, today, ws), [scoped, today, ws]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     let pairs = scoped.table.rows.map((row, i) => ({ row, values: scoped.values[i] }));
     if (q) {
       pairs = pairs.filter(({ values }) =>
-        table.columns.some((c) => formatValue(c, values[c.id] ?? null, settings).toLowerCase().includes(q)),
+        table.columns.some((c) => text(table, c, values[c.id]).toLowerCase().includes(q)),
       );
     }
     if (sort) pairs = pairs.slice().sort((a, b) => compare(a.values[sort.columnId], b.values[sort.columnId]) * sort.dir);
     // Newest first by default: what you just wrote is what you want to see.
     else pairs = pairs.slice().reverse();
     return pairs.map((p) => p.row);
-  }, [scoped, query, sort, table.columns, settings]);
+  }, [scoped, query, sort, table, text]);
 
   const rename = (name: string) => {
     const trimmed = name.trim();
@@ -138,6 +140,28 @@ export function TableView({ table }: { table: Table }) {
                     }}
                   >
                     ＋ {t("column.new")}
+                  </button>
+                  <hr className="my-1 border-line" />
+                  <div className="px-3 pt-1.5 pb-1 text-xs font-semibold text-ink-2">{t("table.file")}</div>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-soft"
+                    onClick={() => {
+                      setMenu(false);
+                      void exportXlsx(ws, table, settings);
+                    }}
+                  >
+                    {t("table.exportXlsx")}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-soft"
+                    onClick={() => {
+                      setMenu(false);
+                      exportCsv(ws, table, settings);
+                    }}
+                  >
+                    {t("table.exportCsv")}
                   </button>
                   <hr className="my-1 border-line" />
                   <button type="button" className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-late hover:bg-soft" onClick={removeTable}>
@@ -298,8 +322,9 @@ function Figures({
 }) {
   const t = useT();
   const settings = useStore((s) => s.settings);
-  const numeric = table.columns.filter((c) => NUMERIC_TYPES.includes(c.type) && summary[c.id]?.sum !== undefined);
-  const lead = numeric.find((c) => displayColumn(table, c).type === "money") ?? numeric[0] ?? null;
+  const ws = useStore((s) => s.ws);
+  const numeric = table.columns.filter((c) => summary[c.id]?.sum !== undefined);
+  const lead = numeric.find((c) => displayColumn(table, c, ws).type === "money") ?? numeric[0] ?? null;
 
   // Daily (or monthly) bars for the lead figure.
   const bars = useMemo(() => {
@@ -344,7 +369,7 @@ function Figures({
   others.push({ value: formatNumber(scoped.table.rows.length, settings.locale), label: t("figures.entries") });
   for (const c of numeric) {
     if (c === lead || others.length >= 3) continue;
-    others.push({ value: formatValue(displayColumn(table, c), summary[c.id].sum!, settings), label: c.name });
+    others.push({ value: formatValue(displayColumn(table, c, ws), summary[c.id].sum!, settings), label: c.name });
   }
   for (const c of table.columns) {
     if (c.type !== "checkbox" || others.length >= 3) continue;
@@ -361,7 +386,7 @@ function Figures({
       {lead ? (
         <div className="col-span-2 md:col-span-1">
           <div className="font-display text-[34px] leading-none font-bold tracking-[-0.04em] md:text-[42px]">
-            {formatValue(displayColumn(table, lead), summary[lead.id].sum ?? 0, settings)}
+            {formatValue(displayColumn(table, lead, ws), summary[lead.id].sum ?? 0, settings)}
           </div>
           <div className="mt-2 text-ink-2">
             {lead.name}

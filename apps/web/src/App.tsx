@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { ImportDialog } from "./components/ImportDialog.tsx";
 import { NewTableDialog } from "./components/NewTableDialog.tsx";
+import { ReportDialog, ReportView } from "./components/Reports.tsx";
 import { Onboarding } from "./components/Onboarding.tsx";
 import { Sidebar, Wordmark } from "./components/Sidebar.tsx";
 import { TableView } from "./components/TableView.tsx";
@@ -49,6 +51,23 @@ export function App() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
   const [newTable, setNewTable] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [newReport, setNewReport] = useState(false);
+  const report = useStore((s) => s.ws.reports?.find((r) => r.id === s.activeReportId) ?? null);
+  const sidebarProps = {
+    onNewTable: () => {
+      setDrawer(false);
+      setNewTable(true);
+    },
+    onImport: () => {
+      setDrawer(false);
+      setImporting(true);
+    },
+    onNewReport: () => {
+      setDrawer(false);
+      setNewReport(true);
+    },
+  };
   const [drawer, setDrawer] = useState(false);
   useAppearance(settings);
 
@@ -73,20 +92,14 @@ export function App() {
   return (
     <div className="flex h-dvh">
       <aside className="hidden w-64 shrink-0 md:block">
-        <Sidebar onNewTable={() => setNewTable(true)} />
+        <Sidebar {...sidebarProps} />
       </aside>
 
       {drawer && (
         <div className="fixed inset-0 z-40 md:hidden" onClick={() => setDrawer(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <aside className="absolute inset-y-0 left-0 w-72 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <Sidebar
-              onNewTable={() => {
-                setDrawer(false);
-                setNewTable(true);
-              }}
-              onNavigate={() => setDrawer(false)}
-            />
+            <Sidebar {...sidebarProps} onNavigate={() => setDrawer(false)} />
           </aside>
         </div>
       )}
@@ -98,7 +111,9 @@ export function App() {
             ☰
           </button>
         </div>
-        {table ? (
+        {report ? (
+          <ReportView key={report.id} report={report} />
+        ) : table ? (
           <TableView key={table.id} table={table} />
         ) : (
           <div className="flex-1 overflow-y-auto">
@@ -110,6 +125,8 @@ export function App() {
       </main>
 
       <NewTableDialog open={newTable} onClose={() => setNewTable(false)} />
+      <ImportDialog open={importing} onClose={() => setImporting(false)} />
+      <ReportDialog open={newReport} onClose={() => setNewReport(false)} reportId={null} />
       <Toast />
     </div>
   );

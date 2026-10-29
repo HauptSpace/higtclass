@@ -20,11 +20,12 @@ export function SummaryView({ table, summary }: { table: Table; summary: Record<
   const t = useT();
   const today = useToday();
   const settings = useStore((s) => s.settings);
+  const ws = useStore((s) => s.ws);
   const numeric = table.columns.filter((c) => summary[c.id]?.sum !== undefined);
   const valueCol = numeric[0] ?? null;
-  const groupCols = table.columns.filter((c) => c.type === "select");
+  const groupCols = table.columns.filter((c) => c.type === "select" || c.type === "link");
   const dateCol = table.columns.find((c) => c.type === "date");
-  const fmt = (n: number) => (valueCol ? formatValue(displayColumn(table, valueCol), n, settings) : String(n));
+  const fmt = (n: number) => (valueCol ? formatValue(displayColumn(table, valueCol, ws), n, settings) : String(n));
 
   if (!numeric.length && !groupCols.length) {
     return <p className="border-t-2 border-rule py-8 text-ink-2">{t("summary.none")}</p>;
@@ -53,7 +54,7 @@ export function SummaryView({ table, summary }: { table: Table; summary: Record<
             <tbody>
               {numeric.map((c) => {
                 const s = summary[c.id];
-                const col = displayColumn(table, c);
+                const col = displayColumn(table, c, ws);
                 return (
                   <tr key={c.id} className="border-t border-line">
                     <td className="py-2.5 font-bold">{c.name}</td>
@@ -70,15 +71,15 @@ export function SummaryView({ table, summary }: { table: Table; summary: Record<
         <Bars
           key={g.id}
           title={t("summary.by", { column: g.name })}
-          groups={groupBy(table, g.id, valueCol?.id ?? null, today)}
+          groups={groupBy(table, g.id, valueCol?.id ?? null, today, ws)}
           useSum={!!valueCol}
           fmt={fmt}
           label={(k) => k || t("summary.empty")}
-          colorOf={(k) => statusColor(k)}
+          colorOf={(k) => (g.type === "select" ? statusColor(k) : null)}
         />
       ))}
       {dateCol && (
-        <Bars title={t("summary.byMonth")} groups={groupByMonth(table, dateCol.id, valueCol?.id ?? null, today)} useSum={!!valueCol} fmt={fmt} label={monthLabel} />
+        <Bars title={t("summary.byMonth")} groups={groupByMonth(table, dateCol.id, valueCol?.id ?? null, today, ws)} useSum={!!valueCol} fmt={fmt} label={monthLabel} />
       )}
     </div>
   );

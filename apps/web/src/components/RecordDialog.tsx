@@ -1,5 +1,7 @@
 import {
   addRecords,
+  backlinks,
+  cellText,
   computeRow,
   displayColumn,
   formatValue,
@@ -34,7 +36,8 @@ export function RecordDialog({
   const dispatch = useStore((s) => s.dispatch);
   const showToast = useStore((s) => s.showToast);
   const row = rowId ? table.rows.find((r) => r.id === rowId) : undefined;
-  const editable = table.columns.filter((c) => c.type !== "formula");
+  const ws = useStore((s) => s.ws);
+  const editable = table.columns.filter((c) => c.type !== "formula" && c.type !== "lookup");
 
   const blank = () =>
     Object.fromEntries(editable.map((c) => [c.id, c.type === "date" ? today : ""])) as Record<string, string>;
@@ -48,7 +51,7 @@ export function RecordDialog({
     // Reset only when the dialog opens or switches row.
   }, [open, rowId]);
 
-  const ctx = { locale: settings.locale };
+  const ctx = { locale: settings.locale, ws };
 
   const save = (again: boolean) => {
     if (row) {
@@ -80,7 +83,8 @@ export function RecordDialog({
     onClose();
   };
 
-  const computed = row ? computeRow(table, row, today) : {};
+  const computed = row ? computeRow(table, row, today, ws) : {};
+  const linked = row ? backlinks(ws, table.id, row.id) : [];
   const bad = new Set(problems.map((p) => p.columnId));
 
   return (
@@ -89,7 +93,7 @@ export function RecordDialog({
       onClose={onClose}
       title={
         <span>
-          {table.icon} {row ? t("record.edit") : t("record.new")}
+          {row ? t("record.edit") : t("record.new")}
         </span>
       }
       footer={
@@ -115,13 +119,13 @@ export function RecordDialog({
         }}
       >
         {table.columns.map((col, i) => {
-          if (col.type === "formula") {
+          if (col.type === "formula" || col.type === "lookup") {
             if (!row) return null;
             const c = computed[col.id];
             return (
               <Label key={col.id} text={col.name}>
                 <div className="rounded-xl bg-soft px-3.5 py-2.5 font-bold">
-                  {c && "value" in c ? formatValue(displayColumn(table, col), c.value, settings) : c ? t(`formula.${c.error}`) : ""}
+                  {c && "value" in c ? formatValue(displayColumn(table, col, ws), c.value, settings) : c ? t(`formula.${c.error}`) : ""}
                 </div>
               </Label>
             );
@@ -133,11 +137,35 @@ export function RecordDialog({
                   column={col}
                   value={drafts[col.id] ?? ""}
                   onChange={(v) => setDrafts((d) => ({ ...d, [col.id]: v }))}
-                  autoFocus={i === table.columns.findIndex((c) => c.type !== "date" && c.type !== "formula")}
+                  autoFocus={i === table.columns.findIndex((c) => c.type !== "date" && c.type !== "formula" && c.type !== "lookup")}
                   onEnter={() => save(false)}
                 />
               </Label>
             </div>
+          );
+        })}
+        {linked.map((b) => {
+          const money = b.table.columns.find((c) => c.type === "money");
+          const sum = money ? b.rows.reduce((acc, r) => acc + (typeof r.values[money.id] === "number" ? (r.values[money.id] as number) : 0), 0) : null;
+          const title = b.table.columns.find((c) => c.type === "text") ?? b.table.columns.find((c) => c.type === "date");
+          return (
+            <section key={b.table.id + b.column.id} className="border-t-2 border-rule pt-3">
+              <h3 className="font-extrabold">
+                {t("record.linked", { table: b.table.name, n: b.rows.length })}
+                {money && sum !== null && <span className="font-semibold text-ink-2"> · {t("record.linkedTotal", { sum: formatValue(money, sum, settings) })}</span>}
+              </h3>
+              <ul className="mt-2">
+                {b.rows
+                  .slice(-6)
+                  .reverse()
+                  .map((r) => (
+                    <li key={r.id} className="flex justify-between gap-3 border-b border-line py-1.5 text-sm">
+                      <span className="truncate">{title ? cellText(ws, b.table, title, r.values[title.id], settings) : ""}</span>
+                      <b>{money ? cellText(ws, b.table, money, r.values[money.id], settings) : ""}</b>
+                    </li>
+                  ))}
+              </ul>
+            </section>
           );
         })}
         {problems.length > 0 && (

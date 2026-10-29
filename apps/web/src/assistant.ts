@@ -1,4 +1,4 @@
-import { formatValue, type CellValue, type Op, type Table, type Workspace } from "@higtclass/core";
+import { cellText, type CellValue, type Op, type Table, type Workspace } from "@higtclass/core";
 import type { Translate } from "./i18n/index.ts";
 import type { AppSettings } from "./store.ts";
 
@@ -81,7 +81,7 @@ export function describeOps(ws: Workspace, ops: Op[], settings: AppSettings, t: 
   const tables = new Map(ws.tables.map((tb) => [tb.id, tb]));
   const show = (tb: Table | undefined, columnId: string, value: CellValue) => {
     const col = tb?.columns.find((c) => c.id === columnId);
-    return col ? ([col.name, formatValue(col, value, settings) || "—"] as [string, string]) : null;
+    return col && tb ? ([col.name, cellText({ tables: [...tables.values()] }, tb, col, value, settings) || "—"] as [string, string]) : null;
   };
 
   const visit = (op: Op) => {

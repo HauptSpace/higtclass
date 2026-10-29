@@ -27,6 +27,8 @@ export const TYPE_ICONS: Record<ColumnType, string> = {
   select: "◉",
   checkbox: "☑",
   formula: "ƒ",
+  link: "↗",
+  lookup: "⇢",
 };
 
 const splitOptions = (s: string) =>
@@ -50,6 +52,7 @@ export function ColumnDialog({
   const t = useT();
   const today = useToday();
   const settings = useStore((s) => s.settings);
+  const ws = useStore((s) => s.ws);
   const dispatch = useStore((s) => s.dispatch);
   const column = columnId ? table.columns.find((c) => c.id === columnId) : undefined;
 
@@ -58,6 +61,13 @@ export function ColumnDialog({
   const [options, setOptions] = useState("");
   const [formula, setFormula] = useState("");
   const [currency, setCurrency] = useState("");
+  const [linkTableId, setLinkTableId] = useState("");
+  const [viaColumnId, setViaColumnId] = useState("");
+  const [lookupColumnId, setLookupColumnId] = useState("");
+
+  const otherTables = ws.tables.filter((tb) => tb.id !== table.id);
+  const linkColumns = table.columns.filter((c) => c.type === "link" && c.id !== column?.id);
+  const viaTable = ws.tables.find((tb) => tb.id === linkColumns.find((c) => c.id === viaColumnId)?.linkTableId);
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +76,15 @@ export function ColumnDialog({
     setOptions((column?.options ?? []).join(", "));
     setFormula(column?.formula ?? "");
     setCurrency(column?.currency ?? "");
+    setLinkTableId(column?.linkTableId ?? otherTables[0]?.id ?? "");
+    setViaColumnId(column?.lookup?.viaColumnId ?? linkColumns[0]?.id ?? "");
+    setLookupColumnId(column?.lookup?.columnId ?? "");
   }, [open, columnId]);
+
+  // Pick the first column of the linked table once the link is chosen.
+  useEffect(() => {
+    if (viaTable && !viaTable.columns.some((c) => c.id === lookupColumnId)) setLookupColumnId(viaTable.columns[0]?.id ?? "");
+  }, [viaTable, lookupColumnId]);
 
   let formulaError: string | null = null;
   let preview: string | null = null;
@@ -77,20 +95,25 @@ export function ColumnDialog({
       const tmp = { ...table, columns: [...table.columns.filter((c) => c.id !== draft.id), draft] };
       const first = table.rows[0];
       if (first) {
-        const cell = computeRow(tmp, first, today)[draft.id];
+        const cell = computeRow(tmp, first, today, ws)[draft.id];
         if ("error" in cell) formulaError = t(`formula.${cell.error}`);
-        else preview = formatValue(displayColumn(tmp, draft), cell.value, settings);
+        else preview = formatValue(displayColumn(tmp, draft, ws), cell.value, settings);
       }
     } catch {
       formulaError = t("formula.syntax");
     }
   }
 
-  const canSave = name.trim() !== "" && !(type === "formula" && (!formula.trim() || formulaError));
+  const canSave =
+    name.trim() !== "" &&
+    !(type === "formula" && (!formula.trim() || formulaError)) &&
+    !(type === "link" && !linkTableId) &&
+    !(type === "lookup" && (!viaColumnId || !lookupColumnId));
+  const lookup = { viaColumnId, columnId: lookupColumnId };
 
   const save = () => {
     if (!canSave) return;
-    const ctx = { locale: settings.locale };
+    const ctx = { locale: settings.locale, ws };
     if (!column) {
       const res = addColumn(table, {
         name,
@@ -98,6 +121,8 @@ export function ColumnDialog({
         options: splitOptions(options),
         formula,
         currency: currency || undefined,
+        linkTableId: type === "link" ? linkTableId : undefined,
+        lookup: type === "lookup" ? lookup : undefined,
       });
       if (!res.problems.length) dispatch(res.op, t("column.new"));
       onClose();
@@ -107,10 +132,14 @@ export function ColumnDialog({
     const patch: ColumnPatch = {};
     if (name.trim() !== column.name) patch.name = name.trim();
     if (type !== column.type) {
-      ops.push(changeColumnType(table, column.id, type, ctx, { options: splitOptions(options), formula }).op);
+      ops.push(changeColumnType(table, column.id, type, ctx, { options: splitOptions(options), formula, linkTableId, lookup }).op);
     } else {
       if (type === "select" && options !== (column.options ?? []).join(", ")) patch.options = splitOptions(options);
       if (type === "formula" && formula !== column.formula) patch.formula = formula;
+      if (type === "link" && linkTableId !== column.linkTableId) {
+        ops.push(changeColumnType(table, column.id, "link", ctx, { linkTableId }).op);
+      }
+      if (type === "lookup" && (viaColumnId !== column.lookup?.viaColumnId || lookupColumnId !== column.lookup?.columnId)) patch.lookup = lookup;
     }
     if (type === "money" && (currency || undefined) !== column.currency) patch.currency = currency || undefined;
     if (Object.keys(patch).length) ops.push({ type: "column.update", tableId: table.id, columnId: column.id, patch });
@@ -156,7 +185,7 @@ export function ColumnDialog({
         <div>
           <span className="mb-1.5 block text-sm font-semibold text-ink-2">{t("column.type")}</span>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {COLUMN_TYPES.map((ct) => (
+            {COLUMN_TYPES.filter((ct) => (ct !== "link" || otherTables.length > 0) && (ct !== "lookup" || linkColumns.length > 0 || column?.type === "lookup")).map((ct) => (
               <button
                 key={ct}
                 type="button"
@@ -190,6 +219,42 @@ export function ColumnDialog({
             </select>
           </Label>
         )}
+        {type === "link" && (
+          <Label text={t("column.linkTable")} hint={t("column.linkHint")}>
+            <select className={inputClass} value={linkTableId} onChange={(e) => setLinkTableId(e.target.value)}>
+              {otherTables.map((tb) => (
+                <option key={tb.id} value={tb.id}>
+                  {tb.name}
+                </option>
+              ))}
+            </select>
+          </Label>
+        )}
+        {type === "lookup" &&
+          (linkColumns.length === 0 ? (
+            <p className="font-semibold text-late">{t("column.noLinks")}</p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Label text={t("column.via")}>
+                <select className={inputClass} value={viaColumnId} onChange={(e) => setViaColumnId(e.target.value)}>
+                  {linkColumns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Label>
+              <Label text={t("column.lookupColumn")}>
+                <select className={inputClass} value={lookupColumnId} onChange={(e) => setLookupColumnId(e.target.value)}>
+                  {(viaTable?.columns ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Label>
+            </div>
+          ))}
         {type === "formula" && (
           <Label
             text={t("column.formula")}
@@ -204,7 +269,7 @@ export function ColumnDialog({
             }
           >
             <input
-              className={`${inputClass} font-mono`}
+              className={inputClass}
               value={formula}
               onChange={(e) => setFormula(e.target.value)}
               placeholder="[A] * [B]"

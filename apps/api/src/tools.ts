@@ -24,6 +24,7 @@ const columnDraft = z.object({
   options: z.array(z.string()).optional(),
   formula: z.string().optional(),
   currency: z.string().optional(),
+  link_table_id: z.string().optional(),
 });
 
 const cell = z.object({ column: z.string().min(1), value: z.union([z.string(), z.number(), z.boolean(), z.null()]) });
@@ -50,10 +51,15 @@ const columnSchema = {
   type: "object",
   properties: {
     name: { type: "string" },
-    type: { type: "string", enum: COLUMN_TYPES, description: "money for amounts, date for dates, select for a fixed set of choices, checkbox for yes/no, formula for values computed from other columns" },
+    type: {
+      type: "string",
+      enum: COLUMN_TYPES.filter((t) => t !== "lookup"),
+      description: "money for amounts, date for dates, select for a fixed set of choices, checkbox for yes/no, formula for values computed from other columns, link to point at rows of another table",
+    },
     options: { type: "array", items: { type: "string" }, description: "Choices for select columns" },
     formula: { type: "string", description: "For formula columns, e.g. [Price] * [Quantity] — column names in square brackets" },
     currency: { type: "string", description: "ISO code for money columns if different from the workspace currency" },
+    link_table_id: { type: "string", description: "For link columns: id of the table whose rows this column points to (e.g. Orders.Client → Clients)" },
   },
   required: ["name", "type"],
 } as const;
@@ -67,7 +73,7 @@ const rowSchema = {
         type: "object",
         properties: {
           column: { type: "string", description: "Exact column name" },
-          value: { type: ["string", "number", "boolean", "null"], description: "Dates as YYYY-MM-DD, amounts as plain numbers" },
+          value: { type: ["string", "number", "boolean", "null"], description: "Dates as YYYY-MM-DD, amounts as plain numbers, links as the linked row's name" },
         },
         required: ["column", "value"],
       },
@@ -144,6 +150,9 @@ export interface ToolOutcome {
   op?: Op;
 }
 
+type DraftInput = z.infer<typeof columnDraft>;
+const toDraft = ({ link_table_id, ...d }: DraftInput) => ({ ...d, linkTableId: link_table_id }) as never;
+
 const rowsToRecords = (rows: z.infer<typeof rowInput>[]) =>
   rows.map((r) => Object.fromEntries(r.values.map((v) => [v.column, v.value])));
 
@@ -152,7 +161,8 @@ function problemsText(problems: Problem[]) {
 }
 
 /** Validate and run one tool call against the scratch workspace. */
-export function runTool(ws: Workspace, name: string, input: unknown, ctx: CommandContext): ToolOutcome {
+export function runTool(ws: Workspace, name: string, input: unknown, baseCtx: CommandContext): ToolOutcome {
+  const ctx = { ...baseCtx, ws };
   if (!(name in schemas)) return { ok: false, result: { error: `Unknown tool ${name}` } };
   const parsed = schemas[name as ToolName].safeParse(input);
   if (!parsed.success) return { ok: false, result: { error: "Invalid input", details: parsed.error.issues.slice(0, 5) } };
@@ -168,7 +178,7 @@ export function runTool(ws: Workspace, name: string, input: unknown, ctx: Comman
     case "create_table": {
       const d = data as z.infer<typeof schemas.create_table>;
       const res = createTable(
-        { name: d.name, columns: d.columns as never, rows: d.rows ? rowsToRecords(d.rows) : [] },
+        { name: d.name, columns: d.columns.map(toDraft), rows: d.rows ? rowsToRecords(d.rows) : [] },
         ctx,
       );
       return {
@@ -207,7 +217,7 @@ export function runTool(ws: Workspace, name: string, input: unknown, ctx: Comman
       const ops: Op[] = [];
       const problems: Problem[] = [];
       for (const draft of d.columns) {
-        const res = addColumn(t, draft as never);
+        const res = addColumn(t, toDraft(draft));
         ops.push(res.op);
         problems.push(...res.problems);
         t = { ...t, columns: [...t.columns, res.column] };

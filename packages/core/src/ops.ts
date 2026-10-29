@@ -1,5 +1,5 @@
 import { renameFormulaRefs } from "./formula.ts";
-import type { CellValue, Column, Row, Table, Workspace } from "./types.ts";
+import type { CellValue, Column, Report, Row, Table, Workspace } from "./types.ts";
 
 // Every change to a workspace is an operation. Operations are plain JSON,
 // applied by one pure function on every device and on the server, and each
@@ -25,6 +25,9 @@ export type Op =
   | { type: "rows.insert"; tableId: string; rows: Row[]; indexes?: number[] }
   | { type: "rows.delete"; tableId: string; rowIds: string[] }
   | { type: "cells.set"; tableId: string; cells: CellChange[] }
+  | { type: "report.create"; report: Report; index?: number }
+  | { type: "report.update"; reportId: string; patch: Partial<Omit<Report, "id">> }
+  | { type: "report.delete"; reportId: string }
   | { type: "batch"; ops: Op[] };
 
 export class OpError extends Error {}
@@ -53,8 +56,31 @@ function insertAt<T>(list: T[], item: T, index?: number): T[] {
   return copy;
 }
 
+function findReport(ws: Workspace, reportId: string): Report {
+  const r = ws.reports?.find((x) => x.id === reportId);
+  if (!r) throw new OpError(`No report ${reportId}`);
+  return r;
+}
+
 export function applyOp(ws: Workspace, op: Op): Workspace {
   switch (op.type) {
+    case "report.create":
+      if (ws.reports?.some((r) => r.id === op.report.id)) throw new OpError(`Report ${op.report.id} exists`);
+      return { ...ws, reports: insertAt(ws.reports ?? [], op.report, op.index) };
+
+    case "report.update":
+      findReport(ws, op.reportId);
+      return { ...ws, reports: ws.reports!.map((r) => (r.id === op.reportId ? { ...r, ...op.patch } : r)) };
+
+    case "report.delete":
+      findReport(ws, op.reportId);
+      {
+        const reports = ws.reports!.filter((r) => r.id !== op.reportId);
+        if (reports.length) return { ...ws, reports };
+        const { reports: _, ...rest } = ws;
+        return rest;
+      }
+
     case "batch":
       return op.ops.reduce(applyOp, ws);
 
@@ -151,6 +177,21 @@ export function applyOp(ws: Workspace, op: Op): Workspace {
 /** The operation that undoes `op` when applied to `applyOp(ws, op)`. */
 export function invertOp(ws: Workspace, op: Op): Op {
   switch (op.type) {
+    case "report.create":
+      return { type: "report.delete", reportId: op.report.id };
+
+    case "report.delete": {
+      const report = findReport(ws, op.reportId);
+      return { type: "report.create", report, index: ws.reports!.indexOf(report) };
+    }
+
+    case "report.update": {
+      const report = findReport(ws, op.reportId);
+      const patch: Record<string, unknown> = {};
+      for (const key of Object.keys(op.patch)) patch[key] = report[key as keyof Report];
+      return { type: "report.update", reportId: op.reportId, patch };
+    }
+
     case "batch": {
       const inverses: Op[] = [];
       let state = ws;
