@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { serve } from "@hono/node-server";
-import { LOCALES } from "@higtclass/core";
+import { DEFAULT_RULES, isRulePack, LOCALES } from "@higtclass/core";
+import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { AssistantError, runAssistant, type AssistantRequest } from "./assistant.ts";
@@ -13,6 +14,22 @@ const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AU
 const client = hasKey ? new Anthropic() : null;
 
 app.get("/api/health", (c) => c.json({ ok: true, assistant: hasKey }));
+
+// Tips and deadlines ("Для вас"). Edit the JSON file on the server to update
+// every app without a release; the bundled pack is the fallback.
+app.get("/api/rules", async (c) => {
+  const file = process.env.ZIFRA_RULES_FILE;
+  if (file) {
+    try {
+      const pack: unknown = JSON.parse(await readFile(file, "utf8"));
+      if (isRulePack(pack)) return c.json(pack);
+      console.error("ZIFRA_RULES_FILE is not a valid rule pack");
+    } catch (e) {
+      console.error("Could not read ZIFRA_RULES_FILE", e);
+    }
+  }
+  return c.json(DEFAULT_RULES);
+});
 
 app.post("/api/assistant", async (c) => {
   if (!client) return c.json({ error: "assistant_not_configured" }, 503);

@@ -15,6 +15,7 @@ import { useCellText, useIsMobile, useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { AssistantBar } from "./AssistantBar.tsx";
 import { CardsView } from "./CardsView.tsx";
+import { DeadlineBanner } from "./ForYou.tsx";
 import { ColumnDialog } from "./ColumnDialog.tsx";
 import { GridView, type SortState } from "./GridView.tsx";
 import { RecordDialog } from "./RecordDialog.tsx";
@@ -102,6 +103,7 @@ export function TableView({ table }: { table: Table }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
+      <DeadlineBanner />
       <header className="px-4 pt-5 md:px-10 md:pt-8">
         <div className="flex items-start gap-3">
           <TableTitle name={table.name} onRename={rename} />

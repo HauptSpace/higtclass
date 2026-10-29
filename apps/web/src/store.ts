@@ -1,5 +1,8 @@
 import {
   applyOp,
+  DEFAULT_RULES,
+  type Profile,
+  type RulePack,
   detectLocale,
   invertOp,
   LOCALE_RULES,
@@ -32,6 +35,10 @@ export interface AppSettings extends Settings {
   theme: Theme;
   /** Company accent colour; null keeps Zifra black and white. */
   accent: string | null;
+  /** Country and tax situation, for tips and deadlines. null until the person answers. */
+  profile: Profile | null;
+  /** Deadline reminders the person hid, as "id@date". */
+  dismissed: string[];
 }
 
 interface State {
@@ -40,6 +47,10 @@ interface State {
   activeTableId: string | null;
   /** When set, the report is shown instead of a table. */
   activeReportId: string | null;
+  /** A page instead of a table or report. */
+  page: "foryou" | null;
+  /** Tips and deadlines, refreshed from the server when online. */
+  rules: RulePack;
   past: HistoryEntry[];
   future: HistoryEntry[];
   toast: Toast | null;
@@ -49,6 +60,9 @@ interface State {
   redo: () => void;
   setActiveTable: (id: string | null) => void;
   openReport: (id: string | null) => void;
+  openPage: (page: "foryou" | null) => void;
+  setRules: (rules: RulePack) => void;
+  dismiss: (key: string) => void;
   setSettings: (patch: Partial<AppSettings>) => void;
   showToast: (text: string, undoable?: boolean) => void;
   hideToast: () => void;
@@ -58,7 +72,7 @@ const HISTORY_LIMIT = 200;
 
 function initialSettings(): AppSettings {
   const locale = detectLocale(typeof navigator === "undefined" ? [] : navigator.languages ?? [navigator.language]);
-  return { locale, currency: LOCALE_RULES[locale].defaultCurrency, theme: "system", accent: null };
+  return { locale, currency: LOCALE_RULES[locale].defaultCurrency, theme: "system", accent: null, profile: null, dismissed: [] };
 }
 
 // IndexedDB can be unavailable (private mode, blocked storage): the app must
@@ -96,6 +110,8 @@ export const useStore = create<State>()(
       settings: initialSettings(),
       activeTableId: null,
       activeReportId: null,
+      page: null,
+      rules: DEFAULT_RULES,
       past: [],
       future: [],
       toast: null,
@@ -145,11 +161,24 @@ export const useStore = create<State>()(
       },
 
       setActiveTable(id) {
-        setState({ activeTableId: id, activeReportId: null });
+        setState({ activeTableId: id, activeReportId: null, page: null });
       },
 
       openReport(id) {
-        setState({ activeReportId: id });
+        setState({ activeReportId: id, page: null });
+      },
+
+      openPage(page) {
+        setState({ page });
+      },
+
+      setRules(rules) {
+        if (rules.version >= getState().rules.version) setState({ rules });
+      },
+
+      dismiss(key) {
+        const { settings } = getState();
+        setState({ settings: { ...settings, dismissed: [...settings.dismissed.slice(-50), key] } });
       },
 
       setSettings(patch) {
@@ -166,14 +195,21 @@ export const useStore = create<State>()(
     }),
     {
       name: "zifra:v1",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as Partial<State>;
-        if (version < 2 && state.settings) state.settings = { ...initialSettings(), ...state.settings };
+        if (version < 3 && state.settings) state.settings = { ...initialSettings(), ...state.settings };
         return state as State;
       },
       storage: createJSONStorage(() => idbStorage),
-      partialize: (s) => ({ ws: s.ws, settings: s.settings, activeTableId: s.activeTableId, activeReportId: s.activeReportId }),
+      partialize: (s) => ({
+        ws: s.ws,
+        settings: s.settings,
+        activeTableId: s.activeTableId,
+        activeReportId: s.activeReportId,
+        page: s.page,
+        rules: s.rules,
+      }),
     },
   ),
 );

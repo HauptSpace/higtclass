@@ -2,7 +2,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { describeWorkspace, todayISO, type Op, type Settings, type Workspace } from "@higtclass/core";
 import { applyOutcome, runTool, TOOLS } from "./tools.ts";
 
-export const MODEL = process.env.ZIFRA_MODEL ?? "claude-opus-5-5";
+export const MODEL = process.env.ZIFRA_MODEL ?? "claude-haiku-5-5";
+// Server-side refusal fallbacks exist for Opus/Sonnet/Fable, not for Haiku.
+const FALLBACKS = /claude-(opus|sonnet|fable)/.test(MODEL);
 const EFFORT = (process.env.ZIFRA_EFFORT ?? "low") as "low" | "medium" | "high";
 const MAX_TURNS = 6;
 
@@ -72,8 +74,7 @@ export async function runAssistant(client: MessagesClient, req: AssistantRequest
     const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 16000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
+      ...(FALLBACKS ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
       output_config: { effort: EFFORT },
       system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       tools: TOOLS,

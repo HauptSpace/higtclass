@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ForYouView, useRulesSync } from "./components/ForYou.tsx";
 import { ImportDialog } from "./components/ImportDialog.tsx";
 import { NewTableDialog } from "./components/NewTableDialog.tsx";
 import { ReportDialog, ReportView } from "./components/Reports.tsx";
@@ -54,6 +55,8 @@ export function App() {
   const [importing, setImporting] = useState(false);
   const [newReport, setNewReport] = useState(false);
   const report = useStore((s) => s.ws.reports?.find((r) => r.id === s.activeReportId) ?? null);
+  const page = useStore((s) => s.page);
+  useRulesSync();
   const sidebarProps = {
     onNewTable: () => {
       setDrawer(false);
@@ -111,7 +114,9 @@ export function App() {
             ☰
           </button>
         </div>
-        {report ? (
+        {page === "foryou" ? (
+          <ForYouView />
+        ) : report ? (
           <ReportView key={report.id} report={report} />
         ) : table ? (
           <TableView key={table.id} table={table} />

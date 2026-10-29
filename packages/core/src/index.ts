@@ -9,3 +9,4 @@ export * from "./templates.ts";
 export * from "./context.ts";
 export * from "./links.ts";
 export * from "./infer.ts";
+export * from "./knowledge.ts";

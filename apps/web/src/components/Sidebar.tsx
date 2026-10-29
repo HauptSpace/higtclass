@@ -1,6 +1,7 @@
 import { CURRENCIES, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
 import { useActiveTable, useStore, type Theme } from "../store.ts";
+import { useDueItems } from "./ForYou.tsx";
 
 const NO_REPORTS: never[] = [];
 
@@ -33,6 +34,9 @@ export function Sidebar({
   const reports = useStore((s) => s.ws.reports) ?? NO_REPORTS;
   const activeReportId = useStore((s) => s.activeReportId);
   const openReport = useStore((s) => s.openReport);
+  const page = useStore((s) => s.page);
+  const openPage = useStore((s) => s.openPage);
+  const dueSoon = useDueItems(14).filter((d) => !d.holiday).length;
   const sideButton = "flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] text-rail-text hover:bg-white/10";
 
   const changeLocale = (locale: Locale) => {
@@ -45,11 +49,30 @@ export function Sidebar({
     <nav className="flex h-full flex-col gap-7 bg-rail px-4 py-6 text-rail-text" aria-label={t("sidebar.tables")}>
       <Wordmark className="px-2 text-[28px] leading-none" />
 
+      <button
+        type="button"
+        aria-current={page === "foryou" ? "page" : undefined}
+        onClick={() => {
+          openPage("foryou");
+          onNavigate?.();
+        }}
+        className={`-mb-3 flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[15px] font-semibold transition ${
+          page === "foryou" ? "bg-white text-black" : "text-rail-text hover:bg-white/10"
+        }`}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0">
+          <rect x="2" y="3" width="12" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <span className="flex-1">{t("sidebar.forYou")}</span>
+        {dueSoon > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-late px-1.5 text-xs font-bold text-white">{dueSoon}</span>}
+      </button>
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mb-2 px-2 text-sm font-semibold text-rail-dim">{t("sidebar.tables")}</div>
         <ul className="space-y-0.5">
           {tables.map((tbl) => {
-            const on = !activeReportId && active?.id === tbl.id;
+            const on = !page && !activeReportId && active?.id === tbl.id;
             return (
               <li key={tbl.id}>
                 <button
@@ -94,7 +117,7 @@ export function Sidebar({
             <div className="mt-6 mb-2 px-2 text-sm font-semibold text-rail-dim">{t("sidebar.reports")}</div>
             <ul className="space-y-0.5">
               {reports.map((r) => {
-                const on = activeReportId === r.id;
+                const on = !page && activeReportId === r.id;
                 return (
                   <li key={r.id}>
                     <button
