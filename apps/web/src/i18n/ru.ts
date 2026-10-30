@@ -105,7 +105,7 @@ export const ru: Messages = {
   "ai.removePhoto": "Убрать фото",
   "ai.send": "Отправить",
   "ai.thinking": "Разбираю…",
-  "ai.save": "Записать",
+  "ai.save": "Сохранить",
   "ai.discard": "Отменить",
   "ai.saved": "Записано",
   "ai.off": "ИИ-помощник пока не подключён. Короткие записи вроде «кофе 85» или «вчера такси 240» работают и без него.",
@@ -324,7 +324,7 @@ export const ru: Messages = {
   "grid.open": "Открыть запись",
   "grid.applyAll": "Enter — для {n} ячеек",
   "grid.moreRows": "Вставка добавила {n} новых записей",
-  "record.empty": "Заполните хотя бы одно поле.",
+  "record.empty": "Введите что-нибудь — сумму или комментарий.",
   "record.stockLow": "«{name}»: {column} теперь {value}",
   "record.back": "Назад",
   "record.more": "и ещё {n}",
@@ -412,4 +412,5 @@ export const ru: Messages = {
   "common.cancel": "Отмена",
   "common.save": "Сохранить",
   "common.all": "Все",
+  "ai.edit": "Изменить",
 };

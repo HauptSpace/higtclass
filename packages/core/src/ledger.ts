@@ -6,7 +6,7 @@ import type { CellValue, Column, Goal, Ledger, Table } from "./types.ts";
 // Zifra says: came in, went out, what's left — and counts only paid invoices.
 
 export const INCOME_WORDS =
-  /(доход|дохід|приход|надходж|поступлен|зарплат|аванс|income|salary|revenue|einnahm|umsatz|gehalt|erlös|ingreso|sueldo|nómina|cobro)/i;
+  /(доход|дохід|приход|надходж|поступлен|зарплат|аванс|преми|премі|кешбек|income|salary|revenue|bonus|cashback|einnahm|umsatz|gehalt|erlös|prämie|ingreso|sueldo|nómina|cobro)/i;
 export const EXPENSE_WORDS = /(расход|витрат|трат|expense|spending|cost|ausgab|kosten|gasto|egreso)/i;
 const PAID_WORDS = /(оплач|получен|отриман|paid|received|bezahlt|erhalten|pagad|cobrad)/i;
 const SALES_NAME = /(заказ|замовл|продаж|оплат|выручк|виручк|order|sale|payment|invoice|auftr|rechnung|zahlung|verkauf|pedido|venta|cobro|factur|доход|дохід|income|einnahm|ingreso)/i;
@@ -121,8 +121,12 @@ export interface GoalProgress {
 }
 
 /** Progress towards a table's savings goal; `values` are all rows, computed. */
-export function goalProgress(goal: Goal, values: Record<string, CellValue>[], today: string): GoalProgress {
-  const saved = values.reduce((a, v) => a + (typeof v[goal.columnId] === "number" ? (v[goal.columnId] as number) : 0), 0);
+export function goalProgress(goal: Goal, values: Record<string, CellValue>[], today: string, ledger?: Ledger | null): GoalProgress {
+  // In an income & expenses table what's saved is what's left, not every amount added up.
+  const saved =
+    ledger && ledger.amountId === goal.columnId && ledger.kind !== "income"
+      ? Math.max(0, ledgerTotals(ledger, values).balance)
+      : values.reduce((a, v) => a + (typeof v[goal.columnId] === "number" ? (v[goal.columnId] as number) : 0), 0);
   const left = Math.max(0, goal.amount - saved);
   const out: GoalProgress = { saved, amount: goal.amount, left, share: goal.amount > 0 ? Math.min(1, saved / goal.amount) : 0 };
   if (goal.date && goal.date > today) {

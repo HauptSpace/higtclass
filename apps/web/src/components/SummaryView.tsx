@@ -85,7 +85,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
         <section key={`flow-${kind}`} className="border-t-2 border-rule pt-4 lg:col-span-2">
           <h3 className="mb-3 text-xl font-extrabold tracking-tight">{kind === "month" ? t("summary.flowByMonth") : t("summary.flowByQuarter")}</h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-[15px]">
+            <table className="w-full text-sm sm:text-[15px]">
               <thead>
                 <tr className="text-left text-sm text-ink-2">
                   <th className="pb-2 font-semibold">{t("summary.period")}</th>
@@ -97,7 +97,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
               <tbody>
                 {list.map(([k, g]) => (
                   <tr key={k} className="border-t border-line">
-                    <td className="py-2.5 font-bold">{dateKeyLabel(kind, k, settings.locale)}</td>
+                    <td className="py-2.5 pr-2 font-bold">{dateKeyLabel(kind, k, settings.locale)}</td>
                     {ledger.kind !== "expense" && <td className="py-2.5 text-right tabular">{fmt(g.income)}</td>}
                     {ledger.kind !== "income" && <td className="py-2.5 text-right tabular">{fmt(g.expense)}</td>}
                     {ledger.kind === "both" && <td className={`py-2.5 text-right font-extrabold tabular ${g.income - g.expense < 0 ? "text-late" : ""}`}>{fmt(g.income - g.expense)}</td>}
@@ -112,7 +112,8 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
   } else if (numeric.length) {
     sections.push(
       <section key="stats" className="border-t-2 border-rule pt-4 lg:col-span-2">
-        <table className="w-full text-[15px]">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm sm:text-[15px]">
           <thead>
             <tr className="text-left text-sm text-ink-2">
               <th className="pb-2 font-semibold" />
@@ -137,6 +138,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
             })}
           </tbody>
         </table>
+        </div>
       </section>,
     );
   }
@@ -189,7 +191,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
     }
   }
 
-  return <div className="grid gap-x-10 gap-y-8 pb-10 lg:grid-cols-2">{sections}</div>;
+  return <div className="grid min-w-0 grid-cols-1 gap-x-10 gap-y-8 pb-10 lg:grid-cols-2 [&>section]:min-w-0">{sections}</div>;
 }
 
 function Bars({ title, groups, fmt, colorOf }: { title: string; groups: Group[]; fmt: (n: number) => string; colorOf?: (key: string) => string | null }) {

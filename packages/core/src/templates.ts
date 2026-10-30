@@ -82,7 +82,7 @@ export interface CategoryDef {
 const cat = (name: L10n, words: RegExp): CategoryDef => ({ name, words });
 
 export const PERSONAL_EXPENSES: CategoryDef[] = [
-  cat(tr("Еда", "Їжа", "Food", "Essen", "Comida"), /(еда|продукт|кофе|кава|кафе|обед|обід|ужин|вечер|ресторан|магазин|сільпо|атб|novus|пицц|піц|шаурм|хлеб|хліб|молок|groceries|food|coffee|lunch|dinner|restaurant|supermarket|lebensmittel|essen|kaffee|rewe|lidl|aldi|edeka|comida|café|cafe|cena|almuerzo|super|mercadona)/i),
+  cat(tr("Еда", "Їжа", "Food", "Essen", "Comida"), /(еда|ед[уы]|продукт|кофе|ко?ф[еу]|кав[аиуіо]|кафе|обед|обід|ужин|вечер|ресторан|магазин|сільпо|атб|novus|пицц|піц|шаурм|хлеб|хліб|молок|groceries|food|coffee|lunch|dinner|restaurant|supermarket|lebensmittel|essen|kaffee|rewe|lidl|aldi|edeka|comida|café|cafe|cena|almuerzo|super|mercadona)/i),
   cat(tr("Транспорт", "Транспорт", "Transport", "Transport", "Transporte"), /(такси|таксі|taxi|uber|bolt|uklon|уклон|метро|автобус|маршрутк|бензин|топлив|пальн|заправ|парков|поезд|потяг|квиток|билет|fuel|petrol|gas station|bus|train|ticket|parking|benzin|tanken|bahn|ticket|gasolina|tren|aparcamiento)/i),
   cat(tr("Дом", "Дім", "Home", "Wohnen", "Casa"), /(квартир|аренд|оренд|комунал|коммунал|свет|світло|газ|вода|ремонт|rent|electric|utilities|miete|strom|nebenkosten|alquiler|luz|agua)/i),
   cat(tr("Связь", "Зв'язок", "Phone & internet", "Telefon & Internet", "Teléfono e internet"), /(связь|зв.язок|телефон|мобильн|мобільн|интернет|інтернет|київстар|киевстар|vodafone|lifecell|phone|internet|mobile|handy|telekom|o2|teléfono|movistar)/i),
@@ -92,9 +92,10 @@ export const PERSONAL_EXPENSES: CategoryDef[] = [
 ];
 
 export const PERSONAL_INCOME: CategoryDef[] = [
-  cat(tr("Зарплата", "Зарплата", "Salary", "Gehalt", "Sueldo"), /(зарплат|зп|аванс|salary|wage|payday|gehalt|lohn|sueldo|nómina|nomina)/i),
+  cat(tr("Зарплата", "Зарплата", "Salary", "Gehalt", "Sueldo"), /(зарплат|зп|аванс|преми|премі|бонус|кешбек|cashback|salary|wage|payday|bonus|gehalt|lohn|prämie|sueldo|nómina|nomina|paga extra)/i),
   cat(tr("Подработка", "Підробіток", "Side job", "Nebenjob", "Extra"), /(подработ|підробіт|халтур|фриланс|freelance|side|nebenjob|extra)/i),
-  cat(tr("Подарок", "Подарунок", "Gift", "Geschenk", "Regalo"), /(подар|gift|geschenk|regalo)/i),
+  // Only gifts received: "подарунок мамі" is spending.
+  cat(tr("Подарок", "Подарунок", "Gift", "Geschenk", "Regalo"), /(подарили|подарували|подарок от|подарунок від|gift from|got a gift|geschenk von|geschenkt bekommen|regalo de|me regalaron)/i),
   cat(tr("Другой доход", "Інший дохід", "Other income", "Sonstige Einnahme", "Otro ingreso"), /^$/),
 ];
 

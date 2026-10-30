@@ -1,8 +1,8 @@
-import { addRecords, parseQuickEntries, type Op } from "@higtclass/core";
+import { addRecords, parseQuickEntries, type CellValue, type Op, type RawRecord } from "@higtclass/core";
 import { useRef, useState } from "react";
 import { askAssistant, describeOps, readPhoto, type AssistantFailure, type PhotoInput } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
-import { useStockWarnings } from "../lib.ts";
+import { draftOf, useStockWarnings } from "../lib.ts";
 import { useDictation } from "../speech.ts";
 import { useStore } from "../store.ts";
 import { Button } from "./ui.tsx";
@@ -13,7 +13,7 @@ import { Button } from "./ui.tsx";
 type Phase =
   | { kind: "idle" }
   | { kind: "thinking" }
-  | { kind: "preview"; reply: string; ops: Op[]; local?: boolean; note?: AssistantFailure }
+  | { kind: "preview"; reply: string; ops: Op[]; local?: boolean; record?: RawRecord }
   | { kind: "failed"; failure: AssistantFailure }
   | { kind: "reply"; reply: string };
 
@@ -61,7 +61,7 @@ export function ChangeList({ ops }: { ops: Op[] }) {
   );
 }
 
-export function AssistantBar({ tableId }: { tableId: string }) {
+export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (preset: Record<string, string>) => void }) {
   const t = useT();
   const ws = useStore((s) => s.ws);
   const settings = useStore((s) => s.settings);
@@ -79,21 +79,22 @@ export function AssistantBar({ tableId }: { tableId: string }) {
 
   // Short entries ("кава 85", "вчора таксі 240") are understood right here:
   // instant, free and offline. The assistant gets the rest.
-  const quick = (msg: string): Op[] | null => {
+  const quick = (msg: string): { ops: Op[]; record?: RawRecord } | null => {
     const table = ws.tables.find((tb) => tb.id === tableId);
     if (!table || !msg) return null;
     const ctx = { locale: settings.locale, ws };
     const entries = parseQuickEntries(table, msg, ctx);
     if (!entries) return null;
     const res = addRecords(table, entries.map((e) => e.record), ctx);
-    return res.problems.length ? null : [res.op];
+    if (res.problems.length) return null;
+    return { ops: [res.op], record: entries.length === 1 ? entries[0].record : undefined };
   };
 
   async function submit(message = text) {
     const msg = message.trim();
     if (!msg && !photo) return;
     const local = photo ? null : quick(msg);
-    if (local) return setPhase({ kind: "preview", reply: "", ops: local, local: true });
+    if (local) return setPhase({ kind: "preview", reply: "", ops: local.ops, local: true, record: local.record });
     setPhase({ kind: "thinking" });
     const res = await askAssistant({ message: msg, image: photo, activeTableId: tableId, workspace: ws, settings });
     if (!res.ok) return setPhase({ kind: "failed", failure: res.failure });
@@ -134,7 +135,9 @@ export function AssistantBar({ tableId }: { tableId: string }) {
         className="flex items-center gap-2 px-3 py-3 md:gap-3 md:px-4"
         onSubmit={(e) => {
           e.preventDefault();
-          void submit();
+          // Enter again on a preview saves it.
+          if (phase.kind === "preview") save();
+          else void submit();
         }}
       >
         {dictation.supported && (
@@ -204,6 +207,24 @@ export function AssistantBar({ tableId }: { tableId: string }) {
             <Button variant="primary" onClick={save}>
               {t("ai.save")}
             </Button>
+            {phase.record && onEdit && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Fix a guess in the full form: the parsed values become its starting point.
+                  const table = ws.tables.find((tb) => tb.id === tableId);
+                  const record = phase.record!;
+                  if (!table) return;
+                  const preset = Object.fromEntries(
+                    table.columns.filter((c) => record[c.id] !== undefined).map((c) => [c.id, draftOf(c, record[c.id] as CellValue, settings.locale)]),
+                  );
+                  reset();
+                  onEdit(preset);
+                }}
+              >
+                {t("ai.edit")}
+              </Button>
+            )}
             <Button variant="ghost" onClick={reset}>
               {t("ai.discard")}
             </Button>

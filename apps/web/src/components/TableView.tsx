@@ -77,19 +77,26 @@ export function TableView({ table }: { table: Table }) {
   // Every row computed once; then the period and filters; then the search.
   const all = useMemo(() => computedRows(table, today, ws), [table, today, ws]);
   const scoped = useMemo(() => scopeRows(table, all, { filters: ui.filters, period: ui.period }, today, ws), [table, all, ui.filters, ui.period, today, ws]);
-  const visible = useMemo(() => {
+  const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
+    return q ? (v: Record<string, CellValue>) => table.columns.some((c) => text(table, c, v[c.id]).toLowerCase().includes(q)) : null;
+  }, [query, table, text]);
+  const visible = useMemo(() => {
     let idx = scoped;
-    if (q) idx = idx.filter((i) => table.columns.some((c) => text(table, c, all[i][c.id]).toLowerCase().includes(q)));
+    if (matches) idx = idx.filter((i) => matches(all[i]));
     if (ui.sort) {
       const { columnId, dir } = ui.sort;
       idx = idx.slice().sort((a, b) => compare(all[a][columnId], all[b][columnId]) * dir);
-    } else if (!ui.oldestFirst) {
-      // Newest first by default: what you just wrote is what you want to see.
-      idx = idx.slice().reverse();
+    } else {
+      // By date when there is one (entries for yesterday below today's), else in the order written;
+      // newest first by default: what you just wrote is what you want to see.
+      const date = table.columns.find((c) => c.type === "date");
+      const order = idx.slice();
+      if (date) order.sort((a, b) => compare(all[a][date.id], all[b][date.id]) || a - b);
+      idx = ui.oldestFirst ? order : order.reverse();
     }
     return idx;
-  }, [scoped, query, ui.sort, ui.oldestFirst, table, all, text]);
+  }, [scoped, matches, ui.sort, ui.oldestFirst, table, all]);
   const rows = useMemo(() => visible.map((i) => table.rows[i]), [visible, table.rows]);
   const values = useMemo(() => visible.map((i) => all[i]), [visible, all]);
   const summary = useMemo(() => summarizeValues(table, values), [table, values]);
@@ -225,7 +232,7 @@ export function TableView({ table }: { table: Table }) {
 
         <div className="mt-3 flex flex-col gap-2">
           {dateCol && (
-            <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
               <PeriodPicker value={ui.period} onChange={(period) => setUi({ period })} />
             </div>
           )}
@@ -241,7 +248,7 @@ export function TableView({ table }: { table: Table }) {
         </div>
       </header>
 
-      <Figures table={table} values={values} all={all} ui={ui} summary={summary} today={today} onGoal={() => setDialog("goal")} />
+      <Figures table={table} values={values} all={all} ui={ui} summary={summary} today={today} onGoal={() => setDialog("goal")} matches={matches} />
 
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-10">
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1" role="tablist">
@@ -279,7 +286,7 @@ export function TableView({ table }: { table: Table }) {
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col border-t-2 border-rule">
-            <AssistantBar tableId={table.id} />
+            <AssistantBar tableId={table.id} onEdit={(preset) => setRecord({ rowId: null, preset })} />
             {table.rows.length === 0 ? (
               <EmptyRows />
             ) : rows.length === 0 && mode !== "calendar" && mode !== "board" ? (
@@ -392,7 +399,7 @@ function Figure({ value, label, big, tone }: { value: string; label: React.React
   return (
     <div className={`min-w-0 ${big ? "col-span-2 md:col-span-1" : ""}`}>
       <div
-        className={`font-display leading-none font-bold tracking-[-0.04em] break-words tabular ${big ? "text-[32px] md:text-[42px]" : "text-[24px] md:text-[30px]"} ${tone === "late" ? "text-late" : ""}`}
+        className={`font-display leading-none font-bold tracking-[-0.04em] whitespace-nowrap tabular ${big ? "text-[30px] md:text-[42px]" : "text-[19px] sm:text-[24px] md:text-[30px]"} ${tone === "late" ? "text-late" : ""}`}
       >
         {value}
       </div>
@@ -409,7 +416,9 @@ function Figures({
   summary,
   today,
   onGoal,
+  matches,
 }: {
+  matches: ((v: Record<string, CellValue>) => boolean) | null;
   table: Table;
   values: Record<string, CellValue>[];
   all: Record<string, CellValue>[];
@@ -434,12 +443,15 @@ function Figures({
   const prevValues = useMemo(() => {
     if (!prevKind) return null;
     const idx = scopeRows(table, all, { filters: ui.filters, period: { ...ui.period, kind: prevKind } }, today, ws);
-    return idx.map((i) => all[i]);
-  }, [prevKind, table, all, ui.filters, ui.period, today, ws]);
+    const list = idx.map((i) => all[i]);
+    // The search applies to last month too, so "coffee vs last month" compares coffee with coffee.
+    return matches ? list.filter(matches) : list;
+  }, [prevKind, table, all, ui.filters, ui.period, today, ws, matches]);
 
   const delta = (now: number, before: number | null) => {
     if (before === null || before === 0) return null;
-    return (now - before) / Math.abs(before);
+    const d = (now - before) / Math.abs(before);
+    return Math.abs(d) < 0.005 ? null : d;
   };
   const deltaText = (d: number | null, upIsGood: boolean) =>
     d === null ? null : (
@@ -449,12 +461,12 @@ function Figures({
   const items: React.ReactNode[] = [];
 
   if (table.goal) {
-    const p = goalProgress(table.goal, all, today);
+    const p = goalProgress(table.goal, all, today, ledger);
     const goalMoney = (n: number) => formatNumber(n, settings.locale, displayColumn(table, table.columns.find((c) => c.id === table.goal!.columnId) ?? table.columns[0], ws).currency || settings.currency);
     items.push(
       <div key="goal" className="col-span-2 md:col-span-2">
         <button type="button" onClick={onGoal} className="w-full text-left">
-          <div className="font-display text-[32px] leading-none font-bold tracking-[-0.04em] md:text-[42px]">{t("goal.of", { saved: goalMoney(p.saved), amount: goalMoney(p.amount) })}</div>
+          <div className="font-display text-[26px] leading-tight font-bold tracking-[-0.04em] md:text-[42px]">{t("goal.of", { saved: goalMoney(p.saved), amount: goalMoney(p.amount) })}</div>
           <div className="mt-3 h-3 bg-line" aria-hidden="true">
             <div className="h-full bg-accent" style={{ width: `${p.share * 100}%` }} />
           </div>
@@ -528,7 +540,7 @@ function Figures({
     const prevSum = prevValues ? prevValues.reduce((a, v) => a + (typeof v[lead.id] === "number" ? (v[lead.id] as number) : 0), 0) : null;
     items.push(
       <div key="lead" ref={chooseRef} className="relative col-span-2 min-w-0 md:col-span-1">
-        <div className="font-display text-[32px] leading-none font-bold tracking-[-0.04em] break-words tabular md:text-[42px]">
+        <div className="font-display text-[30px] leading-none font-bold tracking-[-0.04em] whitespace-nowrap tabular md:text-[42px]">
           {formatValue(displayColumn(table, lead, ws), sum, settings)}
         </div>
         <div className="mt-2 text-ink-2">

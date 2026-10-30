@@ -248,3 +248,31 @@ describe("choices", () => {
     expect(optionsFor(cat, "Expense")).toContain("Food");
   });
 });
+
+describe("quick entry, round 2", () => {
+  it("reads month names and short dates, keeps the words", () => {
+    const { ws, mainId } = fromTemplate("budget", "uk");
+    const t = tableOf(ws, mainId);
+    const date = t.columns.find((c) => c.name === "Дата")!;
+    const note = t.columns.find((c) => c.name === "Коментар")!;
+    const type = t.columns.find((c) => c.name === "Тип")!;
+    const [a] = parseQuickEntries(t, "5 вересня АТБ 640", { locale: "uk", now, ws })!;
+    expect(a.record[date.id]).toBe("2026-09-05");
+    expect(a.record[note.id]).toBe("АТБ");
+    const [b] = parseQuickEntries(t, "5.9 кава 60", { locale: "uk", now, ws })!;
+    expect(b.record[date.id]).toBe("2026-09-05");
+    const [c] = parseQuickEntries(t, "відклав на відпустку 2000", { locale: "uk", now, ws })!;
+    expect(c.record[note.id]).toBe("Відклав на відпустку");
+    const [gift] = parseQuickEntries(t, "подарунок мамі 800", { locale: "uk", now, ws })!;
+    expect(gift.record[type.id]).toBeUndefined();
+    const [bonus] = parseQuickEntries(t, "премія 3000", { locale: "uk", now, ws })!;
+    expect(bonus.record[type.id]).toBe("Дохід");
+    const [coffee] = parseQuickEntries(t, "каву 85", { locale: "uk", now, ws })!;
+    expect(Object.values(coffee.record)).toContain("Їжа");
+  });
+
+  it("a goal in an income & expenses table counts what's left", () => {
+    const p = goalProgress({ amount: 1000, columnId: "a" }, [{ a: 800, t: "in" }, { a: 300 }], "2026-10-30", { amountId: "a", kind: "both", typeColumnId: "t", incomeValues: ["in"] });
+    expect(p.saved).toBe(500);
+  });
+});

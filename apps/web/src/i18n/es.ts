@@ -105,7 +105,7 @@ export const es: Messages = {
   "ai.removePhoto": "Quitar foto",
   "ai.send": "Enviar",
   "ai.thinking": "Procesando…",
-  "ai.save": "Anotar",
+  "ai.save": "Guardar",
   "ai.discard": "Descartar",
   "ai.saved": "Guardado",
   "ai.off": "El asistente de IA aún no está conectado. Entradas cortas como «café 2,50» o «ayer taxi 12» funcionan sin él.",
@@ -324,7 +324,7 @@ export const es: Messages = {
   "grid.open": "Abrir entrada",
   "grid.applyAll": "Enter aplica a {n} celdas",
   "grid.moreRows": "Al pegar se añadieron {n} entradas",
-  "record.empty": "Rellena al menos un campo.",
+  "record.empty": "Escribe algo: un importe o una nota.",
   "record.stockLow": "«{name}»: {column} ahora es {value}",
   "record.back": "Atrás",
   "record.more": "y {n} más",
@@ -412,4 +412,5 @@ export const es: Messages = {
   "common.cancel": "Cancelar",
   "common.save": "Guardar",
   "common.all": "Todos",
+  "ai.edit": "Cambiar",
 };

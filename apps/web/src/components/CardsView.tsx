@@ -1,4 +1,4 @@
-import { cellText, computeRow, displayColumn, type Column, type Row, type Table } from "@higtclass/core";
+import { cellText, computeRow, displayColumn, ledgerOf, rowSide, type Column, type Row, type Table } from "@higtclass/core";
 import { useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { StatusMark } from "./GridView.tsx";
@@ -34,6 +34,13 @@ export function Card({ table, row, onOpen, compact, hide }: { table: Table; row:
   };
   const show = (c: Column) => cellText(ws, table, c, value(c.id), settings);
   const status = statusCol && statusCol !== hide ? value(statusCol.id) : null;
+  // Income and spending look different here too: +18 500 in green, −85.
+  const ledger = ledgerOf(table);
+  const side = ledger?.kind === "both" && amountCol?.id === ledger.amountId ? rowSide(ledger, row.values) : null;
+  let amount = amountCol ? show(amountCol) : "";
+  if (side && amount) amount = `${side === "income" ? "+" : "−"}${amount.replace(/^[-−]/, "")}`;
+  // No description: name the entry by its category or status instead of "—".
+  const fallback = table.columns.find((c) => c.type === "select" && c.id !== ledger?.typeColumnId && value(c.id));
   const details = [
     ...(dateCol ? [show(dateCol)] : []),
     ...rest
@@ -51,8 +58,8 @@ export function Card({ table, row, onOpen, compact, hide }: { table: Table; row:
       onClick={onOpen}
       className="grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-left"
     >
-      <span className="min-w-0 truncate text-[17px] font-bold">{titleCol ? show(titleCol) || "—" : "—"}</span>
-      <span className="text-right text-[17px] font-extrabold tabular">{amountCol ? show(amountCol) : ""}</span>
+      <span className="min-w-0 truncate text-[17px] font-bold">{(titleCol && show(titleCol)) || (fallback && show(fallback)) || "—"}</span>
+      <span className={`text-right text-[17px] font-extrabold whitespace-nowrap tabular ${side === "income" ? "text-paid" : ""}`}>{amount}</span>
       <span className="min-w-0 truncate text-ink-2">{details.join(" · ")}</span>
       <span className="text-right text-sm">{typeof status === "string" && <StatusMark value={status} column={statusCol} />}</span>
     </button>

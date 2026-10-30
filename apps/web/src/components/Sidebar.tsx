@@ -160,7 +160,7 @@ export function Sidebar({
           <label className="block text-xs text-rail-dim">
             {t("settings.language")}
             <select className={`${railSelect} mt-1`} value={settings.locale} onChange={(e) => changeLocale(e.target.value as Locale)}>
-              {LOCALES.map((l) => (
+              {[...LOCALES].sort((a, b) => LANGUAGE_NAMES[a].localeCompare(LANGUAGE_NAMES[b])).map((l) => (
                 <option key={l} value={l}>
                   {LANGUAGE_NAMES[l]}
                 </option>

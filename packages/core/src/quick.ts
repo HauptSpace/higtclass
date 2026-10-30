@@ -14,6 +14,25 @@ const SPLIT = /\s*;\s*|,\s+(?=[^\d\s])|\s+(?:и|і|та|and|und|y|e|plus)\s+/iu;
 const CURRENCY_WORD = /^(₽|₴|\$|€|£|руб\.?|р\.?|грн\.?|гривен\p{L}*|uah|rub|usd|eur|euro?s?|евро|євро|доллар\p{L}*|долар\p{L}*|dollars?|zł|pln)$/iu;
 const STOP = /^(на|за|в|во|у|з|с|по|для|от|від|for|on|at|in|to|für|am|im|um|zu|para|por|en|de|del|el|la)$/iu;
 const DATE_TOKEN = /^(\d{1,2}[./]\d{1,2}[./](\d{2}|\d{4})|\d{1,2}\/\d{1,2}|\d{2}\.\d{2}|\d{1,2}\.\d{1,2}\.)$/;
+/** "5.9" is a date only when another number in the entry is the amount. */
+const SHORT_DATE = /^\d{1,2}\.\d{1,2}$/;
+
+// Month names as people write them in a date: "5 вересня", "5. Oktober", "Sep 5", "5 de mayo".
+const MONTHS: [RegExp, number][] = [
+  [/^(янв|січ|jan|ene)/i, 1],
+  [/^(фев|лют|feb)/i, 2],
+  [/^(мар|берез|mär|mar)/i, 3],
+  [/^(апр|квіт|apr|abr)/i, 4],
+  [/^(мая|май|трав|may|mai|mayo)/i, 5],
+  [/^(июн|черв|jun)/i, 6],
+  [/^(июл|лип|jul)/i, 7],
+  [/^(авг|серп|aug|ago)/i, 8],
+  [/^(сен|верес|sep|set)/i, 9],
+  [/^(окт|жовт|oct|okt)/i, 10],
+  [/^(ноя|листоп|nov)/i, 11],
+  [/^(дек|груд|dec|dez|dic)/i, 12],
+];
+const monthOf = (w: string) => (w.length >= 3 ? MONTHS.find(([re]) => re.test(w))?.[1] : undefined);
 
 export interface QuickEntry {
   record: RawRecord;
@@ -55,6 +74,38 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
         set(dateCol, parseDate(w in rules.relativeDays ? w : words[i], locale, ctx.now));
         used.add(i);
         break;
+      }
+      // "5 вересня" / "5. Oktober" / "Sep 5" / "5 de mayo"
+      const day = Number(w.replace(/\.$/, ""));
+      const nextWord = (words[i + 1] ?? "").toLowerCase();
+      const afterDe = nextWord === "de" ? (words[i + 2] ?? "").toLowerCase() : nextWord;
+      const month = /^\d{1,2}\.?$/.test(w) && day >= 1 && day <= 31 ? monthOf(afterDe) : undefined;
+      if (month) {
+        const year = (ctx.now ?? new Date()).getFullYear();
+        set(dateCol, parseDate(`${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, locale, ctx.now));
+        used.add(i).add(i + 1);
+        if (nextWord === "de") used.add(i + 2);
+        break;
+      }
+      const m2 = monthOf(w);
+      const d2 = Number((words[i + 1] ?? "").replace(/[.,]$/, ""));
+      if (m2 && /^\d{1,2}[.,]?$/.test(words[i + 1] ?? "") && d2 >= 1 && d2 <= 31 && /^[a-z]/i.test(w)) {
+        const year = (ctx.now ?? new Date()).getFullYear();
+        set(dateCol, parseDate(`${year}-${String(m2).padStart(2, "0")}-${String(d2).padStart(2, "0")}`, locale, ctx.now));
+        used.add(i).add(i + 1);
+        break;
+      }
+    }
+    // "5.9 кава 60": a short d.m counts as the date when another number is the amount.
+    if (!(dateCol.id in record)) {
+      const numeric = words.filter((x, k) => !used.has(k) && /\d/.test(x));
+      const at = words.findIndex((x, k) => !used.has(k) && SHORT_DATE.test(x));
+      if (at >= 0 && numeric.length >= 2) {
+        const d = parseDate(words[at], locale, ctx.now);
+        if (d) {
+          set(dateCol, d);
+          used.add(at);
+        }
       }
     }
   }
@@ -116,8 +167,9 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
   }
 
   const rest = words.filter((_, i) => !used.has(i));
-  const restText = rest.filter((w) => !STOP.test(w)).join(" ");
-  const lower = restText.toLowerCase();
+  // The description keeps the person's words ("відклав на відпустку"), minus a dangling preposition.
+  const restText = rest.join(" ").replace(new RegExp(`(^|\\s)(${STOP.source.slice(2, -2)})$`, "iu"), "").trim();
+  const lower = rest.filter((w) => !STOP.test(w)).join(" ").toLowerCase();
 
   // Choices: an option named in the text, else a category recognised by its words.
   const ledger = ledgerOf(table);
@@ -125,7 +177,13 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
   let income = false;
   for (const col of editable.filter((c) => c.type === "select" && c !== typeCol)) {
     const options = col.options ?? [];
-    let hit = options.find((o) => o.length >= 3 && new RegExp(`(^|\\s)${escape(o.toLowerCase())}`, "u").test(lower));
+    const defOf = (o: string) => ALL_CATEGORIES.find((d) => Object.values(d.name).some((n) => n.toLowerCase() === o.toLowerCase()));
+    // A category named in the text counts, unless its own words say otherwise ("подарунок мамі" is not a gift received).
+    let hit = options.find((o) => {
+      if (o.length < 3 || !new RegExp(`(^|\\s)${escape(o.toLowerCase())}`, "u").test(lower)) return false;
+      const def = defOf(o);
+      return !def || def.words.source === "^$" || def.words.test(lower) || !col.scope?.map[o] || !ledger?.incomeValues?.includes(col.scope.map[o]);
+    });
     if (!hit && lower) {
       const def = ALL_CATEGORIES.find((d) => d.words.test(lower) && options.some((o) => Object.values(d.name).some((n) => n.toLowerCase() === o.toLowerCase())));
       if (def) hit = options.find((o) => Object.values(def.name).some((n) => n.toLowerCase() === o.toLowerCase()));

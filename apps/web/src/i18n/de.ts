@@ -105,7 +105,7 @@ export const de: Messages = {
   "ai.removePhoto": "Foto entfernen",
   "ai.send": "Senden",
   "ai.thinking": "Wird verarbeitet…",
-  "ai.save": "Eintragen",
+  "ai.save": "Speichern",
   "ai.discard": "Verwerfen",
   "ai.saved": "Gespeichert",
   "ai.off": "Der KI-Assistent ist noch nicht verbunden. Kurze Einträge wie „Kaffee 3,50“ oder „gestern Taxi 12“ gehen auch ohne ihn.",
@@ -324,7 +324,7 @@ export const de: Messages = {
   "grid.open": "Eintrag öffnen",
   "grid.applyAll": "Enter gilt für {n} Zellen",
   "grid.moreRows": "Einfügen hat {n} neue Einträge angelegt",
-  "record.empty": "Füllen Sie mindestens ein Feld aus.",
+  "record.empty": "Geben Sie etwas ein — Betrag oder Notiz.",
   "record.stockLow": "„{name}“: {column} jetzt {value}",
   "record.back": "Zurück",
   "record.more": "und {n} weitere",
@@ -412,4 +412,5 @@ export const de: Messages = {
   "common.cancel": "Abbrechen",
   "common.save": "Speichern",
   "common.all": "Alle",
+  "ai.edit": "Ändern",
 };

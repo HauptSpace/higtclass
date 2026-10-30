@@ -340,7 +340,7 @@ function SuggestionCard({ s }: { s: Suggestion }) {
     control = (
       <ul className="space-y-3">
         {goals.map((tb) => {
-          const p = goalProgress(tb.goal!, computedRows(tb, today, ws), today);
+          const p = goalProgress(tb.goal!, computedRows(tb, today, ws), today, ledgerOf(tb));
           const money = (n: number) => formatNumber(Math.round(n), l, settings.currency);
           return (
             <li key={tb.id}>

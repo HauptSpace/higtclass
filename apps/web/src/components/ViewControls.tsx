@@ -22,7 +22,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
   useDismiss(box, open, () => setOpen(false));
   const inMore = MORE.includes(value.kind);
   return (
-    <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t("report.period")}>
+    <div className="flex items-center gap-1 max-sm:flex-nowrap sm:flex-wrap" role="group" aria-label={t("report.period")}>
       {MAIN.map((k) => (
         <button key={k} type="button" aria-pressed={value.kind === k} onClick={() => onChange({ kind: k, columnId: value.columnId })} className={pill(value.kind === k)}>
           {t(`period.${k}`)}
@@ -33,7 +33,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
           {inMore ? periodLabel(t, value, locale) : t("period.more")} ▾
         </button>
         {open && (
-          <div className="absolute left-0 z-30 mt-2 w-64 rounded-xl border-2 border-ink bg-paper p-2 shadow-xl">
+          <div className="z-40 rounded-xl border-2 border-ink bg-paper p-2 shadow-xl max-sm:fixed max-sm:inset-x-4 max-sm:top-24 sm:absolute sm:left-0 sm:mt-2 sm:w-64">
             {MORE.filter((k) => k !== "custom").map((k) => (
               <button
                 key={k}
@@ -171,7 +171,7 @@ function FilterEditor({ table, onAdd }: { table: Table; onAdd: (f: Filter) => vo
   const numeric = col && ["number", "money", "date"].includes(col.type);
 
   return (
-    <div className="absolute left-0 z-30 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border-2 border-ink bg-paper p-3 shadow-xl">
+    <div className="z-40 rounded-xl border-2 border-ink bg-paper p-3 shadow-xl max-sm:fixed max-sm:inset-x-4 max-sm:top-24 sm:absolute sm:left-0 sm:mt-2 sm:w-80">
       <label className="block text-xs font-semibold text-ink-2">
         {t("filter.pickColumn")}
         <select

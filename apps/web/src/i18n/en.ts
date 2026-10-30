@@ -323,7 +323,7 @@ export const en = {
   "grid.open": "Open entry",
   "grid.applyAll": "Enter applies to {n} cells",
   "grid.moreRows": "Paste added {n} new entries",
-  "record.empty": "Fill in at least one field.",
+  "record.empty": "Type something to save — an amount or a note.",
   "record.stockLow": "“{name}”: {column} is now {value}",
   "record.back": "Back",
   "record.more": "and {n} more",
@@ -411,6 +411,7 @@ export const en = {
   "common.cancel": "Cancel",
   "common.save": "Save",
   "common.all": "All",
+  "ai.edit": "Change",
 } as const;
 
 export type MessageKey = keyof typeof en;
