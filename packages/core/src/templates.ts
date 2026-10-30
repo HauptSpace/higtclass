@@ -29,6 +29,7 @@ const N = {
   stock: tr("Остаток", "Залишок", "In stock", "Bestand", "Stock"),
   revenue: tr("Выручка", "Виручка", "Revenue", "Umsatz", "Ingresos"),
   margin: tr("Маржа", "Маржа", "Margin", "Marge", "Margen"),
+  discount: tr("Скидка", "Знижка", "Discount", "Rabatt", "Descuento"),
   channel: tr("Канал", "Канал", "Channel", "Kanal", "Canal"),
   supplier: tr("Поставщик", "Постачальник", "Supplier", "Lieferant", "Proveedor"),
   total: tr("Итого", "Разом", "Total", "Summe", "Total"),
@@ -43,7 +44,9 @@ const N = {
   status: tr("Статус", "Статус", "Status", "Status", "Estado"),
   paid: tr("Оплачено", "Оплачено", "Paid", "Bezahlt", "Pagado"),
   service: tr("Услуга", "Послуга", "Service", "Leistung", "Servicio"),
-  received_total: tr("Всего оплат", "Усього оплат", "Total billed", "Summe Zahlungen", "Total cobrado"),
+  received_total: tr("Получено", "Отримано", "Received", "Erhalten", "Cobrado"),
+  debt: tr("Долг", "Борг", "Owes", "Offen", "Pendiente"),
+  paidOn: tr("Дата оплаты", "Дата оплати", "Paid on", "Bezahlt am", "Fecha de cobro"),
   task: tr("Задача", "Завдання", "Task", "Aufgabe", "Tarea"),
   job: tr("Работа", "Робота", "Job", "Auftrag", "Trabajo"),
   worker: tr("Исполнитель", "Виконавець", "Assigned to", "Mitarbeiter", "Asignado a"),
@@ -62,12 +65,14 @@ const N = {
   route: tr("Маршрут", "Маршрут", "Route", "Strecke", "Ruta"),
   purpose: tr("Цель поездки", "Мета поїздки", "Purpose", "Zweck", "Motivo"),
   km: tr("Км", "Км", "km", "km", "km"),
+  receipt: tr("Чек", "Чек", "Receipt", "Beleg", "Recibo"),
   allowance: tr("Возмещение", "Відшкодування", "Allowance", "Pauschale", "Importe"),
 };
 
 const opts = (...items: L10n[]) => (l: Locale) => items.map((i) => i[l]);
 
 const INCOME = tr("Доход", "Дохід", "Income", "Einnahme", "Ingreso");
+const DONE = tr("Готово", "Готово", "Done", "Erledigt", "Hecho");
 const EXPENSE = tr("Расход", "Витрата", "Expense", "Ausgabe", "Gasto");
 
 /**
@@ -103,12 +108,13 @@ export const BUSINESS_EXPENSES: CategoryDef[] = [
   cat(tr("Материалы и товар", "Матеріали й товар", "Materials & goods", "Material & Waren", "Material y mercancía"), /(материал|матеріал|товар|закуп|material|waren|einkauf|baumarkt|obi|hornbach|stock|mercanc)/i),
   cat(tr("Инструмент и техника", "Інструмент і техніка", "Tools & equipment", "Werkzeug & Geräte", "Herramientas y equipos"), /(инструмент|інструмент|дрель|дриль|ноутбук|компьютер|комп.ютер|техник|техніка|tool|laptop|equipment|werkzeug|gerät|bohrer|herramient|equipo)/i),
   cat(tr("Авто и топливо", "Авто й пальне", "Car & fuel", "Kfz & Kraftstoff", "Coche y combustible"), /(бензин|топлив|пальн|заправ|дизел|авто|машин|ремонт авто|парков|fuel|petrol|diesel|car|parking|tanken|benzin|kfz|werkstatt|gasolina|coche)/i),
+  cat(tr("Поездки", "Поїздки", "Travel", "Reisekosten", "Viajes"), /(такси|таксі|taxi|uber|bolt|поезд|потяг|билет|квиток|авиа|самол|літак|hotel|отель|готел|bahn|zug|flug|ticket|train|flight|tren|vuelo|billete)/i),
   cat(tr("Связь и интернет", "Зв'язок та інтернет", "Phone & internet", "Telefon & Internet", "Teléfono e internet"), /(связь|зв.язок|телефон|интернет|інтернет|phone|internet|handy|telekom|vodafone|o2|teléfono)/i),
   cat(tr("Программы и сервисы", "Програми й сервіси", "Software & services", "Software & Dienste", "Software y servicios"), /(подписк|підписк|софт|програм|сервис|сервіс|хостинг|домен|software|subscription|hosting|domain|abo|lizenz|suscripci)/i),
   cat(tr("Аренда", "Оренда", "Rent", "Miete & Raum", "Alquiler"), /(аренд|оренд|офис|офіс|склад|rent|office|miete|büro|lager|alquiler|oficina)/i),
   cat(tr("Реклама", "Реклама", "Advertising", "Werbung", "Publicidad"), /(реклам|таргет|ads|advert|marketing|werbung|anzeige|publicidad)/i),
   cat(tr("Страховки", "Страховки", "Insurance", "Versicherungen", "Seguros"), /(страхов|insurance|versicherung|seguro)/i),
-  cat(tr("Налоги и взносы", "Податки й внески", "Taxes & contributions", "Steuern & Beiträge", "Impuestos y cuotas"), /(налог|податок|податк|есв|єсв|взнос|внесок|tax|finanzamt|steuer|beitrag|impuesto|cuota)/i),
+  cat(tr("Налоги и взносы", "Податки й внески", "Taxes & contributions", "Steuern & Beiträge", "Impuestos y cuotas"), /(налог|податок|податк|есв|єсв|взнос|внесок|(^|\s)tax(es)?(\s|$)|finanzamt|steuer|beitrag|impuesto|cuota)/i),
   cat(tr("Прочие расходы", "Інші витрати", "Other costs", "Sonstige Ausgaben", "Otros gastos"), /^$/),
 ];
 
@@ -221,7 +227,7 @@ export interface TemplateColumn extends ColumnDraft {
   /** "From link": show `column` of the row linked through `via`. */
   lookupOf?: { via: string; column: string };
   /** Total over the rows of table `table` that link here through its column `via`. */
-  rollupOf?: { table: string; via: string; column: string | null; agg: RollupAgg };
+  rollupOf?: { table: string; via: string; column: string | null; agg: RollupAgg; whereDone?: boolean; where?: { column: string; values: string[] } };
 }
 
 export interface TemplateTable {
@@ -340,6 +346,7 @@ export const TEMPLATES: Template[] = [
         { name: N.amount[l], type: "money" },
         { name: N.counterparty[l], type: "text" },
         { name: N.note[l], type: "text" },
+        { name: N.receipt[l], type: "photo" },
       ],
       bothLedger,
     ),
@@ -380,7 +387,8 @@ export const TEMPLATES: Template[] = [
           { name: N.name[l], type: "text" },
           { name: N.city[l], type: "text" },
           { name: N.phone[l], type: "text" },
-          { name: N.received_total[l], type: "rollup", rollupOf: { table: "payments", via: N.client[l], column: N.amount[l], agg: "sum" } },
+          { name: N.received_total[l], type: "rollup", rollupOf: { table: "payments", via: N.client[l], column: N.amount[l], agg: "sum", where: { column: N.paid[l], values: ["true"] } } },
+          { name: N.debt[l], type: "rollup", rollupOf: { table: "payments", via: N.client[l], column: N.amount[l], agg: "sum", where: { column: N.paid[l], values: [""] } } },
           { name: N.note[l], type: "text" },
         ],
       },
@@ -394,9 +402,11 @@ export const TEMPLATES: Template[] = [
           { name: N.service[l], type: "text" },
           { name: N.amount[l], type: "money" },
           { name: N.paid[l], type: "checkbox" },
+          { name: N.paidOn[l], type: "date" },
           { name: N.note[l], type: "text" },
         ],
-        ledger: (l) => ({ amount: N.amount[l], kind: "income", paid: N.paid[l] }),
+        // Income counts on the day it arrives: a September invoice paid in October is October income.
+        ledger: (l) => ({ amount: N.amount[l], kind: "income", paid: N.paid[l], date: N.paidOn[l] }),
       },
     ],
   },
@@ -503,7 +513,9 @@ export const TEMPLATES: Template[] = [
           { name: N.item[l], type: "link", linkTo: "products" },
           { name: N.qty[l], type: "number", default: 1 },
           { name: N.price[l], type: "lookup", lookupOf: { via: N.item[l], column: N.price[l] } },
-          { name: N.amount[l], type: "formula", formula: `[${N.qty[l]}] * [${N.price[l]}]` },
+          // A discount or marketplace price: the sum is quantity × price minus the discount.
+          { name: N.discount[l], type: "money" },
+          { name: N.amount[l], type: "formula", formula: `[${N.qty[l]}] * [${N.price[l]}] - [${N.discount[l]}]`, format: "money" },
           { name: N.cost[l], type: "lookup", lookupOf: { via: N.item[l], column: N.cost[l] } },
           { name: N.margin[l], type: "formula", formula: `[${N.amount[l]}] - [${N.qty[l]}] * [${N.cost[l]}]` },
           { name: N.channel[l], type: "select", options: ["Instagram", tr("Маркетплейс", "Маркетплейс", "Marketplace", "Marktplatz", "Marketplace")[l], tr("Магазин", "Магазин", "Shop", "Laden", "Tienda")[l], tr("Сайт", "Сайт", "Website", "Webshop", "Web")[l]] },
@@ -584,7 +596,7 @@ export const TEMPLATES: Template[] = [
           { name: N.address[l], type: "text" },
           { name: N.contact[l], type: "text" },
           { name: N.fee[l], type: "money" },
-          { name: N.revenue[l], type: "rollup", rollupOf: { table: "jobs", via: N.client[l], column: N.price[l], agg: "sum" } },
+          { name: N.revenue[l], type: "rollup", rollupOf: { table: "jobs", via: N.client[l], column: N.price[l], agg: "sum", whereDone: true } },
         ],
       },
       {
@@ -595,7 +607,7 @@ export const TEMPLATES: Template[] = [
           { name: N.name[l], type: "text" },
           { name: N.phone[l], type: "text" },
           { name: N.rate[l], type: "money" },
-          { name: N.hours[l], type: "rollup", rollupOf: { table: "jobs", via: N.worker[l], column: N.hours[l], agg: "sum" } },
+          { name: N.hours[l], type: "rollup", rollupOf: { table: "jobs", via: N.worker[l], column: N.hours[l], agg: "sum", whereDone: true } },
           { name: N.active[l], type: "checkbox", default: true },
         ],
       },
@@ -614,7 +626,7 @@ export const TEMPLATES: Template[] = [
             options: opts(
               tr("Запланировано", "Заплановано", "Planned", "Geplant", "Planificado"),
               tr("В работе", "В роботі", "In progress", "In Arbeit", "En curso"),
-              tr("Готово", "Готово", "Done", "Erledigt", "Hecho"),
+              DONE,
               tr("Проблема", "Проблема", "Problem", "Problem", "Problema"),
             )(l),
             default: tr("Запланировано", "Заплановано", "Planned", "Geplant", "Planificado")[l],
@@ -622,7 +634,8 @@ export const TEMPLATES: Template[] = [
           { name: N.hours[l], type: "number" },
           { name: N.price[l], type: "money" },
         ],
-        ledger: (l) => ({ amount: N.price[l], kind: "income" }),
+        // A job is income once it's done; planned and problem jobs are not money yet.
+        ledger: (l) => ({ amount: N.price[l], kind: "income", onlyWhen: { column: N.status[l], values: [DONE[l]] } }),
       },
     ],
   },
@@ -914,6 +927,10 @@ export function instantiateTemplate(tpl: Template, l: Locale, ctx: CommandContex
         const via = source && findColumnByName(source.columns, d.rollupOf.via);
         const valueCol = source && d.rollupOf.column ? findColumnByName(source.columns, d.rollupOf.column) : undefined;
         if (source && via) col.rollup = { tableId: source.id, linkColumnId: via.id, columnId: valueCol?.id ?? null, agg: d.rollupOf.agg };
+        const status = source && d.rollupOf.whereDone ? findColumnByName(source.columns, N.status[l]) : undefined;
+        if (col.rollup && status) col.rollup.where = { columnId: status.id, values: [DONE[l]] };
+        const whereCol = source && d.rollupOf.where ? findColumnByName(source.columns, d.rollupOf.where.column) : undefined;
+        if (col.rollup && whereCol) col.rollup.where = { columnId: whereCol.id, values: d.rollupOf.where!.values };
       }
     });
   }

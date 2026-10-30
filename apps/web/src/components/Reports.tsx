@@ -52,7 +52,8 @@ export function suggestReport(ws: Workspace, table: Table): Draft {
     tableId: table.id,
     measure: money ? { agg: "sum", columnId: money.id } : { agg: "count", columnId: null },
     groupBy: byMonth ? { kind: "month", columnId: date!.id } : { kind: "column", columnId: (group ?? date ?? table.columns[0]).id },
-    flow: ledger?.kind === "both" ? "expense" : null,
+    // Income tables count received money, like the number on top of the table.
+    flow: ledger?.kind === "both" ? "expense" : ledger?.kind === "income" ? "income" : null,
     chart: byMonth ? "columns" : "bars",
     limit: byMonth ? 0 : 10,
     filters: [],
@@ -221,7 +222,7 @@ export function ReportDialog({ open, onClose, reportId }: { open: boolean; onClo
                 ))}
               </select>
             </Label>
-            {ledger && ledger.kind === "both" && (
+            {ledger && (
               <Label text={t("report.flow")}>
                 <select className={inputClass} value={draft.flow ?? ""} onChange={(e) => set({ flow: (e.target.value || null) as Draft["flow"] })}>
                   <option value="">{t("report.flowAll")}</option>

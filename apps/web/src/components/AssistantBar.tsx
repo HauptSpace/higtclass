@@ -82,7 +82,7 @@ export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (p
   const quick = (msg: string): { ops: Op[]; record?: RawRecord } | null => {
     const table = ws.tables.find((tb) => tb.id === tableId);
     if (!table || !msg) return null;
-    const ctx = { locale: settings.locale, ws };
+    const ctx = { locale: settings.locale, ws, currency: settings.currency };
     const entries = parseQuickEntries(table, msg, ctx);
     if (!entries) return null;
     const res = addRecords(table, entries.map((e) => e.record), ctx);
@@ -171,7 +171,13 @@ export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (p
           onChange={async (e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
-            if (file) setPhoto(await readPhoto(file));
+            if (!file) return;
+            try {
+              setPhoto(await readPhoto(file));
+            } catch {
+              // Not a picture (a PDF or CSV picked by mistake).
+              setPhase({ kind: "failed", failure: "notImage" });
+            }
           }}
         />
         {photo && (

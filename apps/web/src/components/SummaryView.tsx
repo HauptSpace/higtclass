@@ -47,6 +47,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
   const settings = useStore((s) => s.settings);
   const ws = useStore((s) => s.ws);
   const ledger = ledgerOf(table);
+  const business = !!table.template && table.template !== "budget";
   const lead = leadColumn(table, ws, (c) => summary[c.id]?.sum !== undefined);
   const numeric = table.columns.filter((c) => summary[c.id]?.sum !== undefined);
   const groupCols = table.columns.filter((c) => (c.type === "select" || c.type === "link") && c.id !== ledger?.typeColumnId);
@@ -91,7 +92,7 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
                   <th className="pb-2 font-semibold">{t("summary.period")}</th>
                   {ledger.kind !== "expense" && <th className="pb-2 text-right font-semibold">{t("figures.income")}</th>}
                   {ledger.kind !== "income" && <th className="pb-2 text-right font-semibold">{t("figures.expense")}</th>}
-                  {ledger.kind === "both" && <th className="pb-2 text-right font-semibold">{t("figures.balance")}</th>}
+                  {ledger.kind === "both" && <th className="pb-2 text-right font-semibold">{business ? t("figures.profit") : t("figures.balance")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -161,7 +162,8 @@ export function SummaryView({ table, values, summary }: { table: Table; values: 
       continue;
     }
     const amount = (v: Record<string, CellValue>) => {
-      if (ledger) return rowFlow(ledger, v)[ledger.kind === "expense" ? "expense" : "income"] + rowFlow(ledger, v).pending;
+      // The same rule as the number on top: only money actually received (or spent).
+      if (ledger) return rowFlow(ledger, v)[ledger.kind === "expense" ? "expense" : "income"];
       if (!lead) return 1;
       const n = v[lead.id];
       return typeof n === "number" ? n : 0;

@@ -3,6 +3,7 @@ import { aggregate, computedRows, FLOW_FILTER, pivot, scopeRows } from "./aggreg
 import { addRecords, optionsFor, renameOption } from "./commands.ts";
 import { computeRow, rowValues } from "./formula.ts";
 import { goalProgress, ledgerOf, ledgerTotals } from "./ledger.ts";
+import { incomeBetween } from "./knowledge.ts";
 import { dateOrder, setRegion } from "./locale.ts";
 import { applyOp, type Op } from "./ops.ts";
 import { dateKey, dateKeyLabel, periodRange } from "./periods.ts";
@@ -74,8 +75,9 @@ describe("ledger", () => {
     expect(totals).toMatchObject({ income: 12000, pending: 6000, pendingCount: 1 });
     // The client shows the total of their payments.
     const c = tableOf(ws, clients.id);
-    const total = c.columns.find((x) => x.type === "rollup")!;
-    expect(rowValues(c, c.rows[0], "2026-10-30", ws)[total.id]).toBe(18000);
+    const [received, owes] = c.columns.filter((x) => x.type === "rollup");
+    const v = rowValues(c, c.rows[0], "2026-10-30", ws);
+    expect([v[received.id], v[owes.id]]).toEqual([12000, 6000]);
   });
 });
 
@@ -274,5 +276,44 @@ describe("quick entry, round 2", () => {
   it("a goal in an income & expenses table counts what's left", () => {
     const p = goalProgress({ amount: 1000, columnId: "a" }, [{ a: 800, t: "in" }, { a: 300 }], "2026-10-30", { amountId: "a", kind: "both", typeColumnId: "t", incomeValues: ["in"] });
     expect(p.saved).toBe(500);
+  });
+});
+
+describe("jobs, round 2", () => {
+  it("counts done jobs as income, keeps the job name and hours", () => {
+    let { ws, mainId } = fromTemplate("team_jobs", "en");
+    const clients = ws.tables.find((t) => t.name === "Clients")!;
+    const staff = ws.tables.find((t) => t.name === "Staff")!;
+    ws = add(ws, clients.id, [{ Name: "Hotel Miramar", "Monthly fee": "900" }], "en");
+    ws = add(ws, staff.id, [{ Name: "Lucía", "Hourly rate": "14" }], "en");
+    const jobs = tableOf(ws, mainId);
+    const [e] = parseQuickEntries(jobs, "Hotel Miramar windows Lucía 4h 120 mañana", { locale: "en", now, ws })!;
+    const named = Object.fromEntries(Object.entries(e.record).map(([id, v]) => [jobs.columns.find((c) => c.id === id)!.name, v]));
+    expect(named).toMatchObject({ Job: "Windows", Hours: 4, Price: 120, Date: "2026-10-31" });
+    ws = add(ws, mainId, [{ Job: "A", Client: "Hotel Miramar", Price: "120", Status: "Done" }, { Job: "B", Client: "Hotel Miramar", Price: "80", Status: "prob" }], "en");
+    const t = tableOf(ws, mainId);
+    expect(t.rows[1].values[t.columns.find((c) => c.name === "Status")!.id]).toBe("Problem");
+    expect(ledgerTotals(ledgerOf(t)!, computedRows(t, "2026-10-30", ws))).toMatchObject({ income: 120, pending: 80 });
+    expect(ledgerOf(tableOf(ws, staff.id))).toBeNull();
+    const c = tableOf(ws, clients.id);
+    const revenue = c.columns.find((x) => x.name === "Revenue")!;
+    expect(rowValues(c, c.rows[0], "2026-10-30", ws)[revenue.id]).toBe(120);
+  });
+});
+
+describe("money, round 2", () => {
+  it("refuses dollars typed into a hryvnia column instead of saving them as hryvnias", () => {
+    const { ws, mainId } = fromTemplate("clients_payments", "uk");
+    const t = tableOf(ws, mainId);
+    const res = addRecords(t, [{ Сума: "$800" }], { locale: "uk", now, ws, currency: "UAH" });
+    expect(res.problems[0].reason).toBe("currency_mismatch");
+    expect(addRecords(t, [{ Сума: "800 грн" }], { locale: "uk", now, ws, currency: "UAH" }).problems).toEqual([]);
+  });
+
+  it("counts income on the payment day", () => {
+    let { ws, mainId } = fromTemplate("clients_payments", "uk");
+    ws = add(ws, mainId, [{ Дата: "2026-09-25", Сума: "1000", Оплачено: "так", "Дата оплати": "2026-10-02" }]);
+    expect(incomeBetween(ws, "2026-07-01", "2026-09-30", "2026-10-30").total).toBe(0);
+    expect(incomeBetween(ws, "2026-10-01", "2026-12-31", "2026-10-30").total).toBe(1000);
   });
 });

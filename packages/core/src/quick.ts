@@ -1,6 +1,7 @@
 import type { CommandContext, RawRecord } from "./commands.ts";
 import { INCOME_WORDS, ledgerOf } from "./ledger.ts";
-import { matchLinkTarget } from "./links.ts";
+import { rowLabel } from "./links.ts";
+import type { Workspace } from "./types.ts";
 import { LOCALE_RULES } from "./locale.ts";
 import { ALL_CATEGORIES } from "./templates.ts";
 import { isComputed, type Column, type Table } from "./types.ts";
@@ -14,6 +15,8 @@ const SPLIT = /\s*;\s*|,\s+(?=[^\d\s])|\s+(?:и|і|та|and|und|y|e|plus)\s+/iu;
 const CURRENCY_WORD = /^(₽|₴|\$|€|£|руб\.?|р\.?|грн\.?|гривен\p{L}*|uah|rub|usd|eur|euro?s?|евро|євро|доллар\p{L}*|долар\p{L}*|dollars?|zł|pln)$/iu;
 const STOP = /^(на|за|в|во|у|з|с|по|для|от|від|for|on|at|in|to|für|am|im|um|zu|para|por|en|de|del|el|la)$/iu;
 const DATE_TOKEN = /^(\d{1,2}[./]\d{1,2}[./](\d{2}|\d{4})|\d{1,2}\/\d{1,2}|\d{2}\.\d{2}|\d{1,2}\.\d{1,2}\.)$/;
+const NOTE_NAME = /(коммент|комент|примеч|приміт|опис|note|notiz|nota|descr|beschreib|zweck|job|работ|робот|auftrag|trabajo|задач|завдан|task|aufgabe|услуг|послуг|service|leistung)/i;
+
 /** "5.9" is a date only when another number in the entry is the amount. */
 const SHORT_DATE = /^\d{1,2}\.\d{1,2}$/;
 
@@ -47,7 +50,16 @@ function isAmountToken(token: string, locale: CommandContext["locale"]): number 
 
 function parseSegment(table: Table, segment: string, ctx: CommandContext): QuickEntry | null {
   const locale = ctx.locale;
-  const rules = LOCALE_RULES[locale];
+  // Relative days in any language: someone using English in Spain says "mañana".
+  const rules = {
+    ...LOCALE_RULES[locale],
+    relativeDays: Object.assign({}, ...Object.values(LOCALE_RULES).map((r) => r.relativeDays), LOCALE_RULES[locale].relativeDays) as Record<string, number>,
+  };
+  const dayWord = (w: string) => {
+    const iso = new Date(ctx.now ?? new Date());
+    iso.setDate(iso.getDate() + rules.relativeDays[w]);
+    return `${iso.getFullYear()}-${String(iso.getMonth() + 1).padStart(2, "0")}-${String(iso.getDate()).padStart(2, "0")}`;
+  };
   const words = segment.trim().split(/\s+/).filter(Boolean);
   if (!words.length) return null;
   const used = new Set<number>();
@@ -65,13 +77,13 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
     for (let i = 0; i < words.length; i++) {
       const two = i + 1 < words.length ? `${words[i]} ${words[i + 1]}`.toLowerCase() : "";
       if (two && two in rules.relativeDays) {
-        set(dateCol, parseDate(two, locale, ctx.now));
+        set(dateCol, dayWord(two));
         used.add(i).add(i + 1);
         break;
       }
       const w = words[i].toLowerCase().replace(/,$/, "");
       if (w in rules.relativeDays || (DATE_TOKEN.test(words[i]) && parseDate(words[i], locale, ctx.now))) {
-        set(dateCol, parseDate(w in rules.relativeDays ? w : words[i], locale, ctx.now));
+        set(dateCol, w in rules.relativeDays ? dayWord(w) : parseDate(words[i], locale, ctx.now));
         used.add(i);
         break;
       }
@@ -110,6 +122,34 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
     }
   }
 
+  // "4h", "12 км", "3шт": a number with a unit goes into the column named after that unit.
+  const numberColsAll = editable.filter((c) => c.type === "number");
+  const UNITS: [RegExp, RegExp][] = [
+    [/^(h|hrs?|ч|час|год|std|stunden?|horas?)$/i, /(час|годин|hour|stund|hora)/i],
+    [/^(km|км)$/i, /(км|km|кілом|kilom)/i],
+    [/^(шт|pcs|stk|uds?)$/i, /(кол|кільк|qty|quant|menge|cant)/i],
+  ];
+  for (let i = 0; i < words.length; i++) {
+    if (used.has(i)) continue;
+    let m = words[i].match(/^(\d+(?:[.,]\d+)?)\s*(\p{L}+)\.?$/u);
+    let span = 1;
+    if (!m && /^\d+(?:[.,]\d+)?$/.test(words[i]) && words[i + 1]) {
+      const unit = words[i + 1].replace(/\.$/, "");
+      if (UNITS.some(([u]) => u.test(unit))) {
+        m = [words[i], words[i], unit] as unknown as RegExpMatchArray;
+        span = 2;
+      }
+    }
+    if (!m) continue;
+    const unit = UNITS.find(([u]) => u.test(m![2]));
+    if (!unit) continue;
+    const col = numberColsAll.find((c) => unit[1].test(c.name) && !(c.id in record));
+    const value = parseNumber(m[1], locale);
+    if (!col || value === null) continue;
+    set(col, value);
+    for (let k = 0; k < span; k++) used.add(i + k);
+  }
+
   // Numbers: join "1 500" back together; currency words around them are noise.
   const numbers: { index: number[]; value: number; strong: boolean }[] = [];
   for (let i = 0; i < words.length; i++) {
@@ -133,11 +173,12 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
   }
 
   const moneyCol = editable.find((c) => c.type === "money");
-  const numberCols = editable.filter((c) => c.type === "number");
+  const numberCols = editable.filter((c) => c.type === "number" && !(c.id in record));
   if (numbers.length) {
     // The amount is the number with a currency or "к", else the last one; others fill quantities.
+    // Without a money column the first number is the quantity ("продала 2 чехла").
     const amountAt = numbers.findIndex((n) => n.strong);
-    const amount = numbers.splice(amountAt >= 0 ? amountAt : numbers.length - 1, 1)[0];
+    const amount = numbers.splice(amountAt >= 0 ? amountAt : moneyCol ? numbers.length - 1 : 0, 1)[0];
     const target = moneyCol ?? numberCols.shift();
     if (target) set(target, amount.value);
     for (const n of numbers) {
@@ -153,7 +194,7 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
       for (let i = 0; i + len <= words.length; i++) {
         const span = Array.from({ length: len }, (_, k) => i + k);
         if (span.some((x) => used.has(x))) continue;
-        const id = matchLinkTarget(ctx.ws, col, span.map((x) => words[x]).join(" "));
+        const id = linkByName(ctx.ws, col, span.map((x) => words[x]).join(" "));
         if (id) {
           best = { from: i, len, id };
           break;
@@ -168,7 +209,7 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
 
   const rest = words.filter((_, i) => !used.has(i));
   // The description keeps the person's words ("відклав на відпустку"), minus a dangling preposition.
-  const restText = rest.join(" ").replace(new RegExp(`(^|\\s)(${STOP.source.slice(2, -2)})$`, "iu"), "").trim();
+  let restText = rest.join(" ").replace(new RegExp(`(^|\\s)(${STOP.source.slice(2, -2)})$`, "iu"), "").trim();
   const lower = rest.filter((w) => !STOP.test(w)).join(" ").toLowerCase();
 
   // Choices: an option named in the text, else a category recognised by its words.
@@ -199,15 +240,43 @@ function parseSegment(table: Table, segment: string, ctx: CommandContext): Quick
     if (value) set(typeCol, value);
   }
 
-  // Whatever is left is the description.
-  const textCol = editable.find((c) => c.type === "text");
+  // "оплачено", "paid", "bezahlt": tick the paid box (and record today as the payment day).
+  const paidCol = ledger?.paidColumnId ? editable.find((c) => c.id === ledger.paidColumnId) : undefined;
+  const PAID = /(^|\s)(оплачен\p{L}*|оплатил\p{L}*|оплатив\p{L}*|сплачен\p{L}*|paid|bezahlt|pagad\p{L}*|cobrad\p{L}*)(?=\s|$)/iu;
+  if (paidCol && PAID.test(lower)) {
+    set(paidCol, true);
+    restText = restText.replace(PAID, "").trim();
+    const paidDate = ledger?.dateColumnId ? editable.find((c) => c.id === ledger.dateColumnId) : undefined;
+    if (paidDate) set(paidDate, dayWord(Object.keys(LOCALE_RULES[locale].relativeDays).find((w) => LOCALE_RULES[locale].relativeDays[w] === 0)!));
+  }
+
+  // Whatever is left is the description: a note/job/item column, else the first text column.
+  const textCol =
+    editable.find((c) => c.type === "text" && NOTE_NAME.test(c.name)) ?? editable.find((c) => c.type === "text");
   if (textCol && restText) set(textCol, restText.charAt(0).toUpperCase() + restText.slice(1));
 
   const understood = moneyCol ? filled.includes(moneyCol.id) : filled.length > 0;
   if (!understood) return null;
   // No date said: it happened today.
-  if (dateCol && !(dateCol.id in record)) record[dateCol.id] = parseDate(Object.keys(rules.relativeDays).find((w) => rules.relativeDays[w] === 0) ?? "", locale, ctx.now);
+  if (dateCol && !(dateCol.id in record)) record[dateCol.id] = dayWord(Object.keys(LOCALE_RULES[locale].relativeDays).find((w) => LOCALE_RULES[locale].relativeDays[w] === 0)!);
   return { record, filled };
+}
+
+/** A linked row whose name is, or starts with, these words ("Hotel Miramar", "Олег"). */
+function linkByName(ws: Workspace | undefined, col: Column, text: string): string | null {
+  const target = ws?.tables.find((t) => t.id === col.linkTableId);
+  if (!target) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/[«»"'“”„]/g, "").replace(/\s+/g, " ").trim();
+  const wanted = norm(text);
+  if (wanted.length < 2) return null;
+  const labels = target.rows.map((r) => ({ id: r.id, label: norm(rowLabel(target, r)) }));
+  const exact = labels.filter((l) => l.label === wanted);
+  if (exact.length === 1) return exact[0].id;
+  // A code typed exactly ("CS-001") finds the row through any of its text columns.
+  const codes = target.rows.filter((r) => target.columns.some((c) => c.type === "text" && typeof r.values[c.id] === "string" && norm(r.values[c.id] as string) === wanted));
+  if (codes.length === 1) return codes[0].id;
+  const starts = labels.filter((l) => l.label.startsWith(wanted) || l.label.split(" ").some((w) => w === wanted));
+  return starts.length === 1 ? starts[0].id : null;
 }
 
 function escape(s: string) {

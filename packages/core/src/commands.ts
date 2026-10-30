@@ -3,7 +3,7 @@ import { matchLinkTarget, rowLabel } from "./links.ts";
 import type { CellChange, Op } from "./ops.ts";
 import type { CellValue, Column, ColumnType, Ledger, Locale, Row, Table, Workspace } from "./types.ts";
 import { isComputed } from "./types.ts";
-import { convertValue, parseValue } from "./values.ts";
+import { convertValue, currencyIn, parseValue } from "./values.ts";
 
 // User-level actions built on top of operations. Commands take raw input
 // (strings the user typed or dictated), validate and parse it, and return
@@ -14,6 +14,8 @@ export interface CommandContext {
   now?: Date;
   /** Needed to resolve linked-table values ("Альфа" → the Alpha row in Clients). */
   ws?: Workspace;
+  /** The workspace currency: "$800" typed into a hryvnia column is refused, not saved as 800 ₴. */
+  currency?: string;
 }
 
 export interface ColumnDraft {
@@ -39,13 +41,16 @@ export interface LedgerDraft {
   type?: string;
   incomeValues?: string[];
   paid?: string;
+  onlyWhen?: { column: string; values: string[] };
+  /** Column with the day the money arrived. */
+  date?: string;
 }
 
 export interface Problem {
   columnId?: string;
   column?: string;
   input?: unknown;
-  reason: "unknown_column" | "invalid_value" | "invalid_formula" | "formula_column" | "unknown_row";
+  reason: "unknown_column" | "invalid_value" | "invalid_formula" | "formula_column" | "unknown_row" | "currency_mismatch";
 }
 
 export type CommandResult<T = object> = { op: Op; problems: Problem[] } & T;
@@ -138,6 +143,12 @@ function parseRecords(
         problems.push({ columnId: col.id, column: col.name, input: raw, reason: "formula_column" });
         continue;
       }
+      const typed = col.type === "money" && typeof raw === "string" ? currencyIn(raw) : null;
+      const expected = col.currency ?? ctx.currency;
+      if (typed && expected && typed !== expected) {
+        problems.push({ columnId: col.id, column: col.name, input: raw, reason: "currency_mismatch" });
+        continue;
+      }
       let v = parseValue(col, raw, ctx.locale, ctx.now);
       if (col.type === "link" && typeof v === "string") v = matchLinkTarget(ctx.ws, col, v) ?? undefined;
       if (v === undefined) {
@@ -147,6 +158,12 @@ function parseRecords(
       if (v !== null) out[col.id] = v;
       if (col.type === "select" && typeof v === "string") {
         const known = [...(col.options ?? []), ...(newOptions.get(col.id) ?? [])];
+        // "prob" means "Problem": the start of exactly one existing choice is that choice, not a new one.
+        const starts = v.length >= 2 ? known.filter((o) => o.toLowerCase().startsWith(v.toLowerCase())) : [];
+        if (!known.some((o) => o.toLowerCase() === v.toLowerCase()) && starts.length === 1) {
+          out[col.id] = starts[0];
+          continue;
+        }
         if (!known.some((o) => o.toLowerCase() === v.toLowerCase())) {
           newOptions.set(col.id, [...(newOptions.get(col.id) ?? []), v]);
         } else {
@@ -188,6 +205,10 @@ export function resolveLedger(columns: Column[], draft: LedgerDraft | undefined)
   }
   const paid = draft.paid ? findColumnByName(columns, draft.paid) : undefined;
   if (paid) ledger.paidColumnId = paid.id;
+  const when = draft.onlyWhen ? findColumnByName(columns, draft.onlyWhen.column) : undefined;
+  if (when && draft.onlyWhen) ledger.onlyWhen = { columnId: when.id, values: draft.onlyWhen.values };
+  const date = draft.date ? findColumnByName(columns, draft.date) : undefined;
+  if (date) ledger.dateColumnId = date.id;
   return ledger;
 }
 

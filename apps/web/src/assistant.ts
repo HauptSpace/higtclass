@@ -13,7 +13,7 @@ export interface PhotoInput {
   previewUrl: string;
 }
 
-export type AssistantFailure = "off" | "busy" | "refused" | "offline" | "error";
+export type AssistantFailure = "off" | "busy" | "refused" | "offline" | "error" | "notImage";
 
 export type AssistantResult = { ok: true; reply: string; ops: Op[] } | { ok: false; failure: AssistantFailure };
 
@@ -35,7 +35,7 @@ export async function askAssistant(input: {
         image: input.image ? { mediaType: input.image.mediaType, data: input.image.data } : undefined,
         mode: input.mode ?? "entry",
         activeTableId: input.activeTableId ?? null,
-        workspace: input.workspace,
+        workspace: withoutPhotos(input.workspace),
         settings: { locale: input.settings.locale, currency: input.settings.currency },
       }),
     });
@@ -55,6 +55,18 @@ export async function askAssistant(input: {
   if (res.status === 429) return { ok: false, failure: "busy" };
   if (error === "refused") return { ok: false, failure: "refused" };
   return { ok: false, failure: "error" };
+}
+
+/** Receipt photos stay on the device: the assistant gets the rows without them. */
+function withoutPhotos(ws: Workspace): Workspace {
+  return {
+    ...ws,
+    tables: ws.tables.map((t) => {
+      const photos = t.columns.filter((c) => c.type === "photo").map((c) => c.id);
+      if (!photos.length) return t;
+      return { ...t, rows: t.rows.map((r) => ({ ...r, values: Object.fromEntries(Object.entries(r.values).filter(([k]) => !photos.includes(k))) })) };
+    }),
+  };
 }
 
 /** Downscale a photo in the browser so uploads stay small and fast. */

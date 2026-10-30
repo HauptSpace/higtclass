@@ -2,8 +2,10 @@ import {
   computedRows,
   displayColumn,
   formatDate,
+  formatDateNumeric,
   formatNumber,
   formatValue,
+  FLOW_FILTER,
   goalProgress,
   ledgerOf,
   ledgerTotals,
@@ -163,9 +165,11 @@ export function TableView({ table }: { table: Table }) {
                   <button type="button" className={menuItem} onClick={() => (setMenu(false), setDialog("ledger"))}>
                     {t("table.money")}
                   </button>
-                  <button type="button" className={menuItem} onClick={() => (setMenu(false), setDialog("goal"))}>
-                    {t("table.goal")}
-                  </button>
+                  {ledgerOf(table)?.kind !== "income" && (
+                    <button type="button" className={menuItem} onClick={() => (setMenu(false), setDialog("goal"))}>
+                      {t("table.goal")}
+                    </button>
+                  )}
                   <hr className="my-1 border-line" />
                   <div className="px-3 pt-1.5 pb-1 text-xs font-semibold text-ink-2">{t("table.columns")}</div>
                   {table.columns.map((c) => (
@@ -287,8 +291,25 @@ export function TableView({ table }: { table: Table }) {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col border-t-2 border-rule">
             <AssistantBar tableId={table.id} onEdit={(preset) => setRecord({ rowId: null, preset })} />
-            {table.rows.length === 0 ? (
+            {table.rows.length === 0 && (mobile || mode !== "grid") ? (
               <EmptyRows />
+            ) : rows.length === 0 && mode === "grid" && !mobile ? (
+              <>
+                <GridView
+                  table={table}
+                  rows={rows}
+                  summary={summary}
+                  sort={ui.sort}
+                  onSort={(sort: SortState) => setUi({ sort })}
+                  oldestFirst={!!ui.oldestFirst}
+                  onToggleOrder={() => setUi({ oldestFirst: !ui.oldestFirst, sort: null })}
+                  onOpenRow={(rowId) => setRecord({ rowId })}
+                  onOpenLinked={(tableId, rowId) => setRecord({ rowId: null, linked: { tableId, rowId } })}
+                  onEditColumn={(columnId) => setColumn({ columnId })}
+                  onAddColumn={() => setColumn({ columnId: null })}
+                />
+                {table.rows.length === 0 ? <EmptyRows /> : <p className="py-6 text-center text-ink-2">{t("table.noMatches")}</p>}
+              </>
             ) : rows.length === 0 && mode !== "calendar" && mode !== "board" ? (
               <p className="py-10 text-center text-ink-2">{t("table.noMatches")}</p>
             ) : mode === "board" ? (
@@ -298,10 +319,11 @@ export function TableView({ table }: { table: Table }) {
                 <CalendarView
                   table={table}
                   rows={rows}
+                  period={ui.period}
                   onOpenRow={(rowId) => setRecord({ rowId })}
                   onNewAt={(date) => {
                     const col = table.columns.find((c) => c.type === "date");
-                    setRecord({ rowId: null, preset: col ? { [col.id]: date } : undefined });
+                    setRecord({ rowId: null, preset: col ? { [col.id]: formatDateNumeric(date, settings.locale) } : undefined });
                   }}
                 />
               </div>
@@ -435,7 +457,10 @@ function Figures({
   const chooseRef = useRef<HTMLDivElement>(null);
   useDismiss(chooseRef, choosing, () => setChoosing(false));
   const ledger = ledgerOf(table);
-  const lead = leadColumn(table, ws, SUMMABLE(summary));
+  // A list that other tables point to (products, staff, clients) has prices and rates, not amounts:
+  // adding them up means nothing. Show how many there are and what's below zero instead.
+  const catalog = !ledger && !table.figure && !table.columns.some((c) => c.type === "date") && ws.tables.some((x) => x.columns.some((c) => c.type === "link" && c.linkTableId === table.id));
+  const lead = catalog ? null : leadColumn(table, ws, SUMMABLE(summary));
   const money = (n: number) => formatNumber(n, settings.locale, (lead && displayColumn(table, lead, ws).currency) || settings.currency);
   const prevKind = previousPeriod(ui.period.kind);
 
@@ -453,9 +478,14 @@ function Figures({
     const d = (now - before) / Math.abs(before);
     return Math.abs(d) < 0.005 ? null : d;
   };
+  const vsKey = ui.period.kind === "quarter" ? "figures.vsPrevQuarter" : ui.period.kind === "year" ? "figures.vsPrevYear" : "figures.vsPrev";
+  // ", +12% vs last month" — or nothing at all (no stray comma) when there's nothing to compare.
   const deltaText = (d: number | null, upIsGood: boolean) =>
     d === null ? null : (
-      <b className={(d >= 0) === upIsGood ? "text-paid" : "text-late"}>{t("figures.vsPrev", { delta: `${d >= 0 ? "+" : "−"}${Math.round(Math.abs(d) * 100)}%` })}</b>
+      <>
+        {", "}
+        <b className={(d >= 0) === upIsGood ? "text-paid" : "text-late"}>{t(vsKey, { delta: `${d >= 0 ? "+" : "−"}${Math.round(Math.abs(d) * 100)}%` })}</b>
+      </>
     );
 
   const items: React.ReactNode[] = [];
@@ -500,7 +530,18 @@ function Figures({
     const now = ledgerTotals(ledger, values);
     const before = prevValues ? ledgerTotals(ledger, prevValues) : null;
     const business = !!table.template && table.template !== "budget";
-    if (ledger.kind === "both") {
+    const only = ui.filters.find((f) => f.columnId === FLOW_FILTER)?.values?.[0] as "income" | "expense" | undefined;
+    if (ledger.kind === "both" && only) {
+      // "Expenses only": the big number is what was spent, not a scary red "loss".
+      items.push(
+        <Figure
+          key="side"
+          big={!table.goal}
+          value={money(now[only])}
+          label={<>{only === "income" ? t("figures.income") : t("figures.expense")}{before && deltaText(delta(now[only], before[only]), only === "income")}</>}
+        />,
+      );
+    } else if (ledger.kind === "both") {
       items.push(
         <Figure
           key="bal"
@@ -510,12 +551,12 @@ function Figures({
           label={
             <>
               {business ? (now.balance < 0 ? t("figures.loss") : t("figures.profit")) : t("figures.balance")}
-              {before && <>, {deltaText(delta(now.balance, before.balance), true)}</>}
+              {before && deltaText(delta(now.balance, before.balance), true)}
             </>
           }
         />,
-        <Figure key="in" value={money(now.income)} label={<>{t("figures.income")}{before && delta(now.income, before.income) !== null && <>, {deltaText(delta(now.income, before.income), true)}</>}</>} />,
-        <Figure key="out" value={money(now.expense)} label={<>{t("figures.expense")}{before && delta(now.expense, before.expense) !== null && <>, {deltaText(delta(now.expense, before.expense), false)}</>}</>} />,
+        <Figure key="in" value={money(now.income)} label={<>{t("figures.income")}{before && deltaText(delta(now.income, before.income), true)}</>} />,
+        <Figure key="out" value={money(now.expense)} label={<>{t("figures.expense")}{before && deltaText(delta(now.expense, before.expense), false)}</>} />,
       );
     } else {
       const side = ledger.kind;
@@ -528,7 +569,7 @@ function Figures({
           label={
             <>
               {side === "income" ? t("figures.income") : t("figures.expense")}
-              {before && <>, {deltaText(delta(v, before[side]), side === "income")}</>}
+              {before && deltaText(delta(v, before[side]), side === "income")}
             </>
           }
         />,
@@ -547,7 +588,7 @@ function Figures({
           <button type="button" onClick={() => setChoosing((c) => !c)} className="underline decoration-line decoration-2 underline-offset-4 hover:text-ink" title={t("figures.choose")}>
             {lead.name} ▾
           </button>
-          {prevSum !== null && delta(sum, prevSum) !== null && <>, {deltaText(delta(sum, prevSum), true)}</>}
+          {prevSum !== null && deltaText(delta(sum, prevSum), true)}
         </div>
         {choosing && (
           <div className="absolute z-30 mt-2 w-60 rounded-xl border-2 border-ink bg-paper p-1.5 shadow-xl">
@@ -576,8 +617,15 @@ function Figures({
   const room = 4 - items.length;
   const others: { value: string; label: string }[] = [];
   if (room > 0) others.push({ value: formatNumber(values.length, settings.locale), label: t("figures.entries") });
+  if (catalog) {
+    for (const c of table.columns) {
+      if (others.length >= room || (c.type !== "formula" && c.type !== "rollup")) continue;
+      const below = values.filter((v) => typeof v[c.id] === "number" && (v[c.id] as number) < 0).length;
+      if (below) others.push({ value: formatNumber(below, settings.locale), label: t("figures.belowZero", { column: c.name }) });
+    }
+  }
   for (const c of table.columns) {
-    if (others.length >= room) break;
+    if (others.length >= room || catalog) break;
     if (c === lead || c.id === ledger?.amountId || summary[c.id]?.sum === undefined || c.type === "lookup") continue;
     // Unit prices pulled from a link don't add up to anything meaningful.
     others.push({ value: formatValue(displayColumn(table, c, ws).type === "money" ? displayColumn(table, c, ws) : { ...c, type: c.type === "number" ? "number" : "formula" }, summary[c.id].sum!, settings), label: c.name });

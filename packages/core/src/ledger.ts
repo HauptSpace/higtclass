@@ -11,8 +11,6 @@ export const EXPENSE_WORDS = /(расход|витрат|трат|expense|spendi
 const PAID_WORDS = /(оплач|получен|отриман|paid|received|bezahlt|erhalten|pagad|cobrad)/i;
 const SALES_NAME = /(заказ|замовл|продаж|оплат|выручк|виручк|order|sale|payment|invoice|auftr|rechnung|zahlung|verkauf|pedido|venta|cobro|factur|доход|дохід|income|einnahm|ingreso)/i;
 const EXPENSE_NAME = /(расход|витрат|expense|ausgab|gasto|покупк|закупк|purchase|einkauf|compra)/i;
-const INCOME_TEMPLATES = ["orders", "clients_payments", "stock_sales", "team_jobs"];
-const EXPENSE_TEMPLATES = ["expenses"];
 
 function amountColumn(table: Table): Column | undefined {
   const money = table.columns.filter((c) => c.type === "money");
@@ -36,12 +34,10 @@ export function ledgerOf(table: Table): Ledger | null {
   if (kindCol) {
     return { amountId: amount.id, kind: "both", typeColumnId: kindCol.id, incomeValues: (kindCol.options ?? []).filter((o) => INCOME_WORDS.test(o)) };
   }
-  if ((table.template && INCOME_TEMPLATES.includes(table.template)) || (!table.template && SALES_NAME.test(table.name))) {
-    return { amountId: amount.id, kind: "income", ...(paid ? { paidColumnId: paid.id } : {}) };
-  }
-  if ((table.template && EXPENSE_TEMPLATES.includes(table.template)) || (!table.template && EXPENSE_NAME.test(table.name))) {
-    return { amountId: amount.id, kind: "expense" };
-  }
+  // Template tables carry their ledger already; the other tables of a template (staff, clients) hold no income.
+  if (table.template) return null;
+  if (SALES_NAME.test(table.name)) return { amountId: amount.id, kind: "income", ...(paid ? { paidColumnId: paid.id } : {}) };
+  if (EXPENSE_NAME.test(table.name)) return { amountId: amount.id, kind: "expense" };
   return null;
 }
 
@@ -58,7 +54,9 @@ export function rowFlow(ledger: Ledger, values: Record<string, CellValue>): Flow
   const out = { income: 0, expense: 0, pending: 0 };
   const v = values[ledger.amountId];
   if (typeof v !== "number" || v === 0) return out;
-  if (ledger.paidColumnId && values[ledger.paidColumnId] !== true) {
+  const when = ledger.onlyWhen;
+  const notYet = when && !when.values.some((x) => x.toLowerCase() === String(values[when.columnId] ?? "").toLowerCase());
+  if ((ledger.paidColumnId && values[ledger.paidColumnId] !== true) || notYet) {
     out.pending = Math.abs(v);
     return out;
   }

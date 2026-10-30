@@ -589,10 +589,12 @@ export function incomeBetween(ws: Workspace, from: string, to: string, today: st
     const ledger = ledgerOf(t);
     if (!ledger || ledger.kind === "expense") continue;
     const date = t.columns.find((c) => c.type === "date");
+    const paidDate = t.columns.find((c) => c.id === ledger.dateColumnId);
     const values = computedRows(t, today, ws);
     let used = false;
     for (const v of values) {
-      const d = date ? v[date.id] : null;
+      // The day the money arrived, if the table records it.
+      const d = (paidDate && v[paidDate.id]) || (date ? v[date.id] : null);
       if (date && (typeof d !== "string" || d < from || d > to)) continue;
       const f = rowFlow(ledger, v);
       if (f.income) {

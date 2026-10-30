@@ -135,6 +135,9 @@ export function parseValue(
     case "lookup":
     case "rollup":
       return undefined;
+    case "photo":
+      // A receipt photo, stored as a small JPEG data URL.
+      return typeof raw === "string" && raw.startsWith("data:image/") ? raw : undefined;
     case "text":
     case "select":
     case "link":
@@ -148,6 +151,7 @@ export function parseValue(
 export function convertValue(value: CellValue, to: Column, locale: Locale): CellValue {
   if (value === null) return null;
   if (to.type === "formula" || to.type === "lookup" || to.type === "rollup") return null;
+  if (to.type === "photo") return typeof value === "string" && value.startsWith("data:image/") ? value : null;
   if (typeof value === "boolean" && (to.type === "text" || to.type === "select")) {
     return value ? LOCALE_RULES[locale].trueWords[0] : LOCALE_RULES[locale].falseWords[0];
   }
@@ -212,6 +216,8 @@ export function formatValue(column: Column, value: CellValue, settings: Settings
       return typeof value === "string" ? formatDate(value, settings.locale) : String(value);
     case "checkbox":
       return value ? "✓" : "";
+    case "photo":
+      return value ? "📎" : "";
     default:
       return String(value);
   }
@@ -236,4 +242,18 @@ export function formatDateNumeric(isoDate: string, locale: Locale): string {
   return cached(`dn:${tag}`, () => new Intl.DateTimeFormat(tag, { day: "2-digit", month: "2-digit", year: "numeric" })).format(
     new Date(y, m - 1, d),
   );
+}
+
+const CURRENCY_SIGNS: [RegExp, string][] = [
+  [/\$|\busd\b|долл|долар|dollar/i, "USD"],
+  [/€|\beur\b|евро|євро|euro/i, "EUR"],
+  [/₴|грн|гривн|\buah\b/i, "UAH"],
+  [/₽|руб|\brub\b/i, "RUB"],
+  [/£|\bgbp\b/i, "GBP"],
+  [/zł|\bpln\b/i, "PLN"],
+];
+
+/** The currency written next to an amount ("$800", "800 грн"), if any. */
+export function currencyIn(raw: string): string | null {
+  return CURRENCY_SIGNS.find(([re]) => re.test(raw))?.[1] ?? null;
 }

@@ -1,7 +1,7 @@
-import { FLOW_FILTER, ledgerOf, rowLabel, type Column, type Filter, type Period, type PeriodKind, type Table } from "@higtclass/core";
+import { FLOW_FILTER, formatDateNumeric, ledgerOf, parseDate, rowLabel, type Column, type Filter, type Period, type PeriodKind, type Table } from "@higtclass/core";
 import { useRef, useState } from "react";
 import { useT } from "../i18n/index.ts";
-import { periodLabel } from "../lib.ts";
+import { dateExample, periodLabel } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { Button, inputClass, optionColor, useDismiss } from "./ui.tsx";
 
@@ -52,20 +52,16 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
               <div className="grid grid-cols-2 gap-2">
                 <label className="text-xs text-ink-2">
                   {t("period.from")}
-                  <input
-                    type="date"
-                    className={`${inputClass} !px-2 !py-1 text-sm`}
-                    value={value.kind === "custom" ? (value.from ?? "") : ""}
-                    onChange={(e) => onChange({ kind: "custom", from: e.target.value || undefined, to: value.kind === "custom" ? value.to : undefined, columnId: value.columnId })}
+                  <TypedDate
+                    value={value.kind === "custom" ? value.from : undefined}
+                    onChange={(from) => onChange({ kind: "custom", from, to: value.kind === "custom" ? value.to : undefined, columnId: value.columnId })}
                   />
                 </label>
                 <label className="text-xs text-ink-2">
                   {t("period.to")}
-                  <input
-                    type="date"
-                    className={`${inputClass} !px-2 !py-1 text-sm`}
-                    value={value.kind === "custom" ? (value.to ?? "") : ""}
-                    onChange={(e) => onChange({ kind: "custom", to: e.target.value || undefined, from: value.kind === "custom" ? value.from : undefined, columnId: value.columnId })}
+                  <TypedDate
+                    value={value.kind === "custom" ? value.to : undefined}
+                    onChange={(to) => onChange({ kind: "custom", to, from: value.kind === "custom" ? value.from : undefined, columnId: value.columnId })}
                   />
                 </label>
               </div>
@@ -74,6 +70,24 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
         )}
       </div>
     </div>
+  );
+}
+
+/** A date typed as 01.08.2026 / "вчора" (not the browser's picker, whose format follows the browser). */
+function TypedDate({ value, onChange }: { value?: string; onChange: (iso: string | undefined) => void }) {
+  const locale = useStore((s) => s.settings.locale);
+  const [text, setText] = useState(value ? formatDateNumeric(value, locale) : "");
+  const bad = text.trim() !== "" && !parseDate(text, locale);
+  return (
+    <input
+      className={`${inputClass} !px-2 !py-1 text-sm ${bad ? "!border-late" : ""}`}
+      value={text}
+      placeholder={dateExample(locale)}
+      aria-invalid={bad}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => onChange(text.trim() ? (parseDate(text, locale) ?? undefined) : undefined)}
+      onKeyDown={(e) => e.key === "Enter" && onChange(text.trim() ? (parseDate(text, locale) ?? undefined) : undefined)}
+    />
   );
 }
 
@@ -105,9 +119,10 @@ export function filterText(t: ReturnType<typeof useT>, table: Table, f: Filter, 
     case "contains":
       return `${col.name} ${t("filter.contains")} “${f.value}”`;
     case "gte":
-      return `${col.name} ≥ ${f.value}`;
-    case "lte":
-      return `${col.name} ≤ ${f.value}`;
+    case "lte": {
+      const shown = col.type === "date" && typeof f.value === "string" ? formatDateNumeric(f.value, useStore.getState().settings.locale) : f.value;
+      return `${col.name} ${f.op === "gte" ? "≥" : "≤"} ${shown}`;
+    }
     default: {
       const labels = choicesOf(table, col, ws);
       const names = (f.values ?? []).map((v) => labels.find((l) => l.value === v)?.label ?? v);
@@ -141,8 +156,10 @@ export function FilterBar({ table, filters, onChange }: { table: Table; filters:
         {open && (
           <FilterEditor
             table={table}
-            onAdd={(f) => {
-              onChange([...filters.filter((x) => x.columnId !== f.columnId || f.op === "gte" || f.op === "lte"), f]);
+            onAdd={(added) => {
+              const list = Array.isArray(added) ? added : [added];
+              const replaced = (x: Filter) => list.some((f) => f.columnId === x.columnId && (f.op === x.op || !["gte", "lte"].includes(f.op)));
+              onChange([...filters.filter((x) => !replaced(x)), ...list]);
               setOpen(false);
             }}
           />
@@ -157,9 +174,10 @@ export function FilterBar({ table, filters, onChange }: { table: Table; filters:
   );
 }
 
-function FilterEditor({ table, onAdd }: { table: Table; onAdd: (f: Filter) => void }) {
+function FilterEditor({ table, onAdd }: { table: Table; onAdd: (f: Filter | Filter[]) => void }) {
   const t = useT();
   const ws = useStore((s) => s.ws);
+  const locale = useStore((s) => s.settings.locale);
   const columns = filterableColumns(table);
   const [columnId, setColumnId] = useState(columns.find((c) => c.type === "select")?.id ?? columns[0]?.id ?? "");
   const [picked, setPicked] = useState<string[]>([]);
@@ -231,16 +249,18 @@ function FilterEditor({ table, onAdd }: { table: Table; onAdd: (f: Filter) => vo
             </>
           ) : numeric ? (
             <div className="grid grid-cols-2 gap-2">
-              <input className={`${inputClass} !py-1.5`} type={col.type === "date" ? "date" : "text"} inputMode="decimal" placeholder={t("period.from")} value={min} onChange={(e) => setMin(e.target.value)} />
-              <input className={`${inputClass} !py-1.5`} type={col.type === "date" ? "date" : "text"} inputMode="decimal" placeholder={t("period.to")} value={max} onChange={(e) => setMax(e.target.value)} />
+              <input className={`${inputClass} !py-1.5`} inputMode={col.type === "date" ? "text" : "decimal"} placeholder={col.type === "date" ? `${t("period.from")} ${dateExample(locale)}` : t("period.from")} value={min} onChange={(e) => setMin(e.target.value)} />
+              <input className={`${inputClass} !py-1.5`} inputMode={col.type === "date" ? "text" : "decimal"} placeholder={col.type === "date" ? `${t("period.to")} ${dateExample(locale)}` : t("period.to")} value={max} onChange={(e) => setMax(e.target.value)} />
               <Button
                 variant="primary"
                 className="col-span-2"
                 disabled={!min && !max}
                 onClick={() => {
-                  const conv = (v: string) => (col.type === "date" ? v : Number(v.replace(/\s/g, "").replace(",", ".")));
-                  if (min) onAdd({ columnId, op: "gte", value: conv(min) });
-                  if (max) onAdd({ columnId, op: "lte", value: conv(max) });
+                  const conv = (v: string) => (col.type === "date" ? (parseDate(v, locale) ?? v) : Number(v.replace(/\s/g, "").replace(",", ".")));
+                  const list: Filter[] = [];
+                  if (min) list.push({ columnId, op: "gte", value: conv(min) });
+                  if (max) list.push({ columnId, op: "lte", value: conv(max) });
+                  onAdd(list);
                 }}
               >
                 {t("filter.apply")}

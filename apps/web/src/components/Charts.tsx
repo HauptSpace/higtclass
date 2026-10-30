@@ -55,8 +55,9 @@ function niceMax(v: number): number {
 export function TimeChart({ data, fmt, kind }: { data: Datum[]; fmt: (n: number) => string; kind: "columns" | "line" }) {
   const box = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
-  const W = 720;
-  const H = 260;
+  // Narrow screens draw a narrower chart, so labels stay readable instead of shrinking to 5px.
+  const W = typeof window !== "undefined" && window.innerWidth < 640 ? 380 : 720;
+  const H = W < 720 ? 220 : 260;
   const pad = { l: 8, r: 8, t: 12, b: 28 };
   const top = niceMax(Math.max(0, ...data.map((d) => d.value)));
   const innerW = W - pad.l - pad.r;

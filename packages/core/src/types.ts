@@ -15,7 +15,8 @@ export type ColumnType =
   | "formula"
   | "link"
   | "lookup"
-  | "rollup";
+  | "rollup"
+  | "photo";
 
 export const COLUMN_TYPES: ColumnType[] = [
   "text",
@@ -28,6 +29,7 @@ export const COLUMN_TYPES: ColumnType[] = [
   "link",
   "lookup",
   "rollup",
+  "photo",
 ];
 
 export type RollupAgg = "sum" | "count" | "avg" | "min" | "max";
@@ -62,7 +64,7 @@ export interface Column {
    * For `rollup` columns: total over the rows of another table that link here,
    * e.g. Products.Sold = sum of Orders.Quantity where Orders.Product is this row.
    */
-  rollup?: { tableId: string; linkColumnId: string; columnId: string | null; agg: RollupAgg };
+  rollup?: { tableId: string; linkColumnId: string; columnId: string | null; agg: RollupAgg; where?: { columnId: string; values: string[] } };
 }
 
 /** Stored cell value. Dates are `YYYY-MM-DD` strings, money is a plain number. */
@@ -89,6 +91,10 @@ export interface Ledger {
   incomeValues?: string[];
   /** Rows count as received/paid only when this checkbox is ticked. */
   paidColumnId?: string;
+  /** Rows count only when this choice column has one of these values (e.g. Status = Done). */
+  onlyWhen?: { columnId: string; values: string[] };
+  /** When the money arrived (a FOP counts income on the day it's received); else the first date column. */
+  dateColumnId?: string;
 }
 
 /** Saving towards a target: progress is the total of `columnId` (all time). */

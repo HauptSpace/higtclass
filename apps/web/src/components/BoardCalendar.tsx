@@ -1,5 +1,5 @@
-import { cellText, localeTag, type Column, type Row, type Table } from "@higtclass/core";
-import { useMemo, useState } from "react";
+import { cellText, localeTag, periodRange, type Column, type Period, type Row, type Table } from "@higtclass/core";
+import { useEffect, useMemo, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
@@ -59,7 +59,7 @@ export function BoardView({
           </select>
         </label>
       )}
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-3">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pr-4 pb-3">
         {lanes.map((lane) => {
           const items = byLane.get(lane)!;
           if (lane === "" && !items.length) return null;
@@ -116,11 +116,13 @@ export function CalendarView({
   rows,
   onOpenRow,
   onNewAt,
+  period,
 }: {
   table: Table;
   rows: Row[];
   onOpenRow: (id: string) => void;
   onNewAt: (date: string) => void;
+  period?: Period;
 }) {
   const t = useT();
   const today = useToday();
@@ -130,6 +132,13 @@ export function CalendarView({
   const [mode, setMode] = useState<"month" | "week">("month");
   const [cursor, setCursor] = useState(() => today);
   const tag = localeTag(settings.locale);
+  // The calendar opens on the chosen period: "next week" shows next week.
+  useEffect(() => {
+    const range = periodRange(period, today);
+    if (!range || !period) return;
+    setCursor(range.from);
+    setMode(period.kind === "week" || period.kind === "nextWeek" ? "week" : "month");
+  }, [period?.kind, period?.from, today]);
 
   const days = useMemo(() => {
     const [y, m, d] = cursor.split("-").map(Number);
@@ -184,6 +193,7 @@ export function CalendarView({
       : `${new Intl.DateTimeFormat(tag, { day: "numeric", month: "short" }).format(new Date(`${days[0]}T12:00:00`))} – ${new Intl.DateTimeFormat(tag, { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${days[6]}T12:00:00`))}`;
   const titleCol = table.columns.find((c) => c.type === "text") ?? table.columns.find((c) => c.type === "link");
   const statusCol = table.columns.find((c) => c.type === "select");
+  const linkCol = table.columns.find((c) => c.type === "link" && c !== titleCol);
   const limit = mode === "week" ? 12 : 3;
 
   return (
@@ -244,7 +254,13 @@ export function CalendarView({
                         className="flex w-full items-center gap-1.5 truncate rounded-md bg-paper px-1.5 py-0.5 text-left text-xs font-semibold shadow-sm ring-1 ring-line hover:ring-ink"
                       >
                         {color && <i className="h-2 w-2 shrink-0" style={{ background: color }} />}
-                        <span className="truncate">{titleCol ? cellText(ws, table, titleCol, r.values[titleCol.id], settings) || "—" : "—"}</span>
+                        <span className="truncate">
+                          {[titleCol, linkCol]
+                            .filter((c): c is Column => !!c)
+                            .map((c) => cellText(ws, table, c, r.values[c.id], settings))
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </span>
                       </button>
                     </li>
                   );

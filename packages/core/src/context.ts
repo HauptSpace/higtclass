@@ -37,6 +37,10 @@ export function describeWorkspace(ws: Workspace, settings: Settings, opts: Conte
         for (const c of t.columns) {
           const v = values[c.id];
           if (v === undefined || v === null) continue;
+          if (c.type === "photo") {
+            named[c.name] = "(photo)";
+            continue;
+          }
           // Links are shown by name: that is how people refer to them.
           const hit = c.type === "link" ? resolveLink(ws, c, v) : null;
           named[c.name] = hit ? rowLabel(hit.table, hit.row) : v;

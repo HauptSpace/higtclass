@@ -80,7 +80,8 @@ export function useDueItems(days = 45): DueItem[] {
     if (!profile) return [];
     const l = settings.locale;
     const money = (n: number) => formatNumber(Math.round(n * 100) / 100, l, settings.currency);
-    const deadlines: DueItem[] = upcomingDeadlines(rules, profile, today, days, 7)
+    // Missed deadlines stay until marked done (up to six weeks back).
+    const deadlines: DueItem[] = upcomingDeadlines(rules, profile, today, days, 45)
       .filter((u) => u.daysLeft >= 0 || !settings.dismissed.includes(`${u.deadline.id}@${u.date}`))
       .map((u) => {
         const amounts: string[] = [];
@@ -231,7 +232,9 @@ function SuggestionCard({ s }: { s: Suggestion }) {
   let control: React.ReactNode = null;
   if (action?.type === "template") {
     const tpl = findTemplate(action.templateId);
-    const covered = ws.tables.find((tb) => tb.template && (action.coveredBy ?? [action.templateId]).includes(tb.template));
+    const covering = ws.tables.filter((tb) => tb.template && (action.coveredBy ?? [action.templateId]).includes(tb.template));
+    // Point at the table that holds the money (Payments), not its sibling (Clients).
+    const covered = covering.find((tb) => ledgerOf(tb)) ?? covering[0];
     if (covered) {
       control = (
         <p className="text-sm">

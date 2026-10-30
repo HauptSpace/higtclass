@@ -7,6 +7,7 @@ import {
   ledgerOf,
   LOCALE_RULES,
   rowFlow,
+  rowSide,
   todayISO,
   toCsv,
   type CellValue,
@@ -49,13 +50,24 @@ function download(blob: Blob, name: string) {
 
 const SYMBOL: Record<string, string> = { EUR: "€", USD: "$", UAH: "₴", GBP: "£", PLN: "zł", CHF: "CHF", RUB: "₽", TRY: "₺", CZK: "Kč", KZT: "₸", BYN: "Br" };
 
-/** Rows to export: what's on screen, oldest first by date — the order an accountant reads. */
-function exportRows(ws: Workspace, table: Table, opts: ExportOptions) {
+/**
+ * Rows to export: what's on screen, oldest first by date — the order an
+ * accountant reads. In an income & expenses table spending gets a minus, so
+ * the column's total is the profit, not income plus spending.
+ */
+function exportRows(ws: Workspace, table: Table, opts: ExportOptions, signed = true) {
   const values = opts.values ?? computedRows(table, todayISO(), ws);
   const date = table.columns.find((c) => c.type === "date");
   const order = values.map((_, i) => i);
   if (date) order.sort((a, b) => String(values[a][date.id] ?? "9999").localeCompare(String(values[b][date.id] ?? "9999")));
-  return order.map((i) => values[i]);
+  const ledger = ledgerOf(table);
+  if (!signed) return order.map((i) => values[i]);
+  return order.map((i) => {
+    const v = values[i];
+    if (ledger?.kind !== "both" || typeof v[ledger.amountId] !== "number") return v;
+    const side = rowSide(ledger, v);
+    return { ...v, [ledger.amountId]: side === "expense" ? -Math.abs(v[ledger.amountId] as number) : Math.abs(v[ledger.amountId] as number) };
+  });
 }
 
 export async function exportXlsx(ws: Workspace, table: Table, settings: Settings, opts: ExportOptions = {}) {
@@ -109,7 +121,8 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
   if (ledger && opts.t) {
     const t = opts.t;
     const sums = new Map<string, { income: number; expense: number }>();
-    for (const v of values) {
+    // From the stored amounts: the minus sign added for the sheet above would flip them.
+    for (const v of exportRows(ws, table, opts, false)) {
       const f = rowFlow(ledger, v);
       const key = category ? cellText(ws, table, category, v[category.id], settings) || "—" : "—";
       const g = sums.get(key) ?? { income: 0, expense: 0 };
@@ -118,11 +131,13 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
       sums.set(key, g);
     }
     const money = `#,##0.00 "${SYMBOL[settings.currency] ?? settings.currency}"`;
-    const head = [category?.name ?? "", t("figures.income"), t("figures.expense")].map((v) => ({ value: v, fontWeight: "bold" as const }));
+    const both = ledger.kind === "both";
+    // Income-only tables (a FOP's payments): just income per group, nothing about spending or profit.
+    const sides = ledger.kind === "income" ? (["income"] as const) : ledger.kind === "expense" ? (["expense"] as const) : (["income", "expense"] as const);
+    const head = [category?.name ?? opts.title ?? table.name, ...sides.map((s) => (s === "income" ? t("figures.income") : t("figures.expense")))].map((v) => ({ value: v, fontWeight: "bold" as const }));
     const lines = [...sums.entries()].sort((a, b) => b[1].income + b[1].expense - (a[1].income + a[1].expense)).map(([k, g]) => [
       { value: k, type: String },
-      g.income ? { value: g.income, type: Number, format: money } : null,
-      g.expense ? { value: g.expense, type: Number, format: money } : null,
+      ...sides.map((s) => (g[s] ? { value: g[s], type: Number, format: money } : null)),
     ]);
     const income = [...sums.values()].reduce((a, g) => a + g.income, 0);
     const expense = [...sums.values()].reduce((a, g) => a + g.expense, 0);
@@ -130,8 +145,8 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
       head,
       ...lines,
       [null],
-      [{ value: t("report.totalRow"), fontWeight: "bold", type: String }, { value: income, type: Number, format: money, fontWeight: "bold" }, { value: expense, type: Number, format: money, fontWeight: "bold" }],
-      [{ value: t("figures.profit"), fontWeight: "bold", type: String }, { value: income - expense, type: Number, format: money, fontWeight: "bold" }, null],
+      [{ value: t("report.totalRow"), fontWeight: "bold", type: String }, ...sides.map((s) => ({ value: s === "income" ? income : expense, type: Number, format: money, fontWeight: "bold" }))],
+      ...(both ? [[{ value: t("figures.profit"), fontWeight: "bold", type: String }, { value: income - expense, type: Number, format: money, fontWeight: "bold" }, null]] : []),
     ]);
     sheetNames.push(t("view.summary").slice(0, 31));
     columns.push([{ width: 30 }, { width: 16 }, { width: 16 }]);
@@ -150,12 +165,26 @@ export function exportCsv(ws: Workspace, table: Table, settings: Settings, opts:
       const value = v[c.id];
       if (c.type === "checkbox") return value === true ? LOCALE_RULES[settings.locale].trueWords[0] : LOCALE_RULES[settings.locale].falseWords[0];
       if (value === null || value === undefined) return null;
-      if (typeof value === "number") return decimal === "," ? String(value).replace(".", ",") : value;
+      if (typeof value === "number") {
+        // Money always with two decimals: 82,10, not 82,1.
+        const text = kinds[i].type === "money" ? value.toFixed(2) : String(value);
+        return decimal === "," ? text.replace(".", ",") : text;
+      }
       // Numeric dates, so Excel reads them as dates.
       if (kinds[i].type === "date" && typeof value === "string") return formatDateNumeric(value, settings.locale);
       return cellText(ws, table, c, value, settings);
     }),
   );
-  const csv = toCsv([table.columns.map((c) => c.name), ...body], settings.locale);
+  // A totals row, like in the .xlsx.
+  const totals = table.columns.map((c, i) => {
+    if (i === 0) return opts.t?.("report.totalRow") ?? "Σ";
+    if (c.type === "lookup") return null;
+    const nums = values.map((v) => v[c.id]).filter((x): x is number => typeof x === "number");
+    if (!nums.length) return null;
+    const sum = nums.reduce((a, b) => a + b, 0);
+    const text = kinds[i].type === "money" ? sum.toFixed(2) : String(Math.round(sum * 100) / 100);
+    return decimal === "," ? text.replace(".", ",") : text;
+  });
+  const csv = toCsv([table.columns.map((c) => c.name), ...body, [], totals], settings.locale);
   download(new Blob([csv], { type: "text/csv;charset=utf-8" }), fileName(opts.title ?? table.name, "csv"));
 }

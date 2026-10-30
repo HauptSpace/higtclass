@@ -34,6 +34,7 @@ export const TYPE_ICONS: Record<ColumnType, string> = {
   link: "↗",
   lookup: "⇢",
   rollup: "Σ",
+  photo: "📷",
 };
 
 const AGGS: RollupAgg[] = ["sum", "count", "avg", "min", "max"];

@@ -1,6 +1,9 @@
 import {
   addRecords,
   COLUMN_TYPES,
+  isComputed,
+  ledgerOf,
+  parseNumber,
   createTable,
   decodeText,
   matchImportColumns,
@@ -32,7 +35,7 @@ async function readFile(file: File): Promise<Sheet[]> {
   return sheets.map((s) => ({ name: s.sheet, grid: s.data as unknown as RawCell[][] }));
 }
 
-const IMPORTABLE: ColumnType[] = COLUMN_TYPES.filter((c) => c !== "formula" && c !== "link" && c !== "lookup" && c !== "rollup");
+const IMPORTABLE: ColumnType[] = COLUMN_TYPES.filter((c) => c !== "formula" && c !== "link" && c !== "lookup" && c !== "rollup" && c !== "photo");
 
 export function ImportDialog({ open, onClose, targetTableId }: { open: boolean; onClose: () => void; targetTableId?: string }) {
   const t = useT();
@@ -99,15 +102,38 @@ export function ImportDialog({ open, onClose, targetTableId }: { open: boolean; 
   };
 
   const targetTable = ws.tables.find((x) => x.id === target);
-  const mapping = useMemo(() => (plan && targetTable ? matchImportColumns(plan, targetTable.columns) : null), [plan, targetTable]);
+  // Only columns people type into can receive data: never a calculated one.
+  const targetColumns = targetTable?.columns.filter((c) => !isComputed(c)) ?? [];
+  const ledger = targetTable ? ledgerOf(targetTable) : null;
+  const [manual, setManual] = useState<Record<string, string | null>>({});
+  useEffect(() => setManual({}), [plan, target]);
+  const mapping = useMemo(() => {
+    if (!plan || !targetTable) return null;
+    return { ...matchImportColumns(plan, targetColumns, ledger?.amountId), ...manual };
+  }, [plan, targetTable, manual]);
 
   const untitled = t("newTable.untitled");
   const result = useMemo(() => {
     if (!plan) return null;
     if (targetTable && mapping) {
-      const records = plan.rows.map((r) => Object.fromEntries(Object.entries(r).flatMap(([k, v]) => (mapping[k] ? [[mapping[k]!, v]] : []))));
-      const res = addRecords(targetTable, records, { locale, ws });
-      return { op: res.op, count: res.rows.length, problems: res.problems, tableId: targetTable.id };
+      if (!Object.values(mapping).some(Boolean)) return null;
+      const typeCol = ledger?.kind === "both" && ledger.typeColumnId ? targetTable.columns.find((c) => c.id === ledger.typeColumnId) : undefined;
+      const typeMapped = typeCol && Object.values(mapping).includes(typeCol.id);
+      const records = plan.rows.map((r) => {
+        const rec: Record<string, unknown> = Object.fromEntries(Object.entries(r).flatMap(([k, v]) => (mapping[k] ? [[mapping[k]!, v]] : [])));
+        // A bank statement's sign says income or expense: −45,90 is spending, +1.250 is income.
+        if (typeCol && !typeMapped && ledger?.amountId) {
+          const raw = rec[ledger.amountId];
+          const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseNumber(raw, locale, { money: true }) : null;
+          if (n !== null) {
+            rec[typeCol.id] = n < 0 ? (typeCol.options ?? []).find((o) => !ledger.incomeValues?.includes(o)) ?? "" : ledger.incomeValues?.[0] ?? "";
+            rec[ledger.amountId] = Math.abs(n);
+          }
+        }
+        return rec;
+      });
+      const res = addRecords(targetTable, records, { locale, ws, currency: useStore.getState().settings.currency });
+      return { op: res.op, count: res.rows.length, problems: res.problems, tableId: targetTable.id, signs: !!typeCol && !typeMapped };
     }
     const res = createTable({ name: name || untitled, icon: "□", columns: plan.columns, rows: plan.rows }, { locale });
     return { op: res.op, count: res.table.rows.length, problems: res.problems, tableId: res.table.id };
@@ -217,6 +243,8 @@ export function ImportDialog({ open, onClose, targetTableId }: { open: boolean; 
               </Label>
             </div>
             {plan.skippedTotals > 0 && <p className="text-sm text-ink-2">{t("import.totalsSkipped", { n: plan.skippedTotals })}</p>}
+            {result && "signs" in result && result.signs && <p className="text-sm text-ink-2">{t("import.signHint")}</p>}
+            {targetTable && mapping && !Object.values(mapping).some(Boolean) && <p className="text-sm font-semibold text-late">{t("import.nothingMapped")}</p>}
             <div className="overflow-x-auto border-t-2 border-rule">
               <table className="w-full text-sm">
                 <thead>
@@ -225,9 +253,19 @@ export function ImportDialog({ open, onClose, targetTableId }: { open: boolean; 
                       <th key={c.name} className="min-w-36 border-b-2 border-rule px-2 py-2 text-left align-bottom">
                         <div className="mb-1.5 font-extrabold">{c.name}</div>
                         {targetTable && mapping ? (
-                          <div className={`text-xs font-semibold ${mapping[c.name] ? "text-ink-2" : "text-late"}`}>
-                            {mapping[c.name] ? `${t("import.mapped")}: ${targetTable.columns.find((x) => x.id === mapping[c.name])?.name}` : t("import.unmapped")}
-                          </div>
+                          <select
+                            aria-label={`${c.name}: ${t("import.map")}`}
+                            className={`w-full rounded-lg border-2 bg-paper px-2 py-1 text-sm font-semibold focus:border-ink ${mapping[c.name] ? "border-line" : "border-dashed border-line text-ink-2"}`}
+                            value={mapping[c.name] ?? ""}
+                            onChange={(e) => setManual((m) => ({ ...m, [c.name]: e.target.value || null }))}
+                          >
+                            <option value="">{t("import.skip")}</option>
+                            {targetColumns.map((x) => (
+                              <option key={x.id} value={x.id}>
+                                → {x.name}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
                           <select
                             aria-label={`${c.name}: ${t("column.type")}`}

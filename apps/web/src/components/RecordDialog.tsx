@@ -5,6 +5,7 @@ import {
   computeRow,
   draftValues,
   isComputed,
+  ledgerOf,
   optionsFor,
   rowLabel,
   updateCells,
@@ -92,7 +93,7 @@ export function RecordDialog({
     // Reset only when the dialog opens or switches row.
   }, [open, rowId, top?.rowId, top?.tableId]);
 
-  const ctx = { locale: settings.locale, ws };
+  const ctx = { locale: settings.locale, ws, currency: settings.currency };
 
   // Preview of calculated columns while typing: price from the product, totals.
   const preview = useMemo(() => {
@@ -104,8 +105,14 @@ export function RecordDialog({
   const save = (again: boolean) => {
     const before = useStore.getState().ws;
     if (row) {
-      const changed = editable.filter((c) => drafts[c.id] !== draftOf(c, row.values[c.id], settings.locale));
-      const res = updateCells(current, changed.map((c) => ({ rowId: row.id, column: c.id, value: drafts[c.id] })), ctx);
+      const ledger = ledgerOf(current);
+      const next = { ...drafts };
+      // Ticking "Paid" fills the payment day with today, unless one is given.
+      if (ledger?.paidColumnId && ledger.dateColumnId && next[ledger.paidColumnId] === "1" && row.values[ledger.paidColumnId] !== true && !next[ledger.dateColumnId]) {
+        next[ledger.dateColumnId] = draftOf(current.columns.find((c) => c.id === ledger.dateColumnId)!, today, settings.locale);
+      }
+      const changed = editable.filter((c) => next[c.id] !== draftOf(c, row.values[c.id], settings.locale));
+      const res = updateCells(current, changed.map((c) => ({ rowId: row.id, column: c.id, value: next[c.id] })), ctx);
       if (res.problems.length) return setProblems(res.problems);
       if (changed.length && dispatch(res.op, t("record.edit"))) warnStock(before, current.id, [row.id]);
       if (stack.length > (openLinked ? 1 : 0)) setStack((s) => s.slice(0, -1));
@@ -119,7 +126,12 @@ export function RecordDialog({
       setEmpty(true);
       return;
     }
-    const raw = Object.fromEntries(Object.entries(drafts).filter(([, v]) => v.trim() !== ""));
+    // Empty fields are sent too: a switched-off "Paid" must stay off, not fall back to its default.
+    const raw: Record<string, string> = { ...drafts };
+    const ledger = ledgerOf(current);
+    if (ledger?.paidColumnId && ledger.dateColumnId && raw[ledger.paidColumnId] === "1" && !raw[ledger.dateColumnId]) {
+      raw[ledger.dateColumnId] = draftOf(current.columns.find((c) => c.id === ledger.dateColumnId)!, today, settings.locale);
+    }
     const res = addRecords(current, [raw], ctx);
     if (res.problems.length) return setProblems(res.problems);
     if (!dispatch(res.op, t("record.new"))) return;
@@ -223,7 +235,9 @@ export function RecordDialog({
         {linked.map((b) => {
           const money = b.table.columns.find((c) => c.type === "money");
           const sum = money ? b.rows.reduce((acc, r) => acc + (typeof r.values[money.id] === "number" ? (r.values[money.id] as number) : 0), 0) : null;
-          const title = b.table.columns.find((c) => c.type === "text" && c.id !== b.column.id);
+          const title =
+            b.table.columns.find((c) => c.type === "text" && c.id !== b.column.id) ??
+            b.table.columns.find((c) => (c.type === "number" || c.type === "select") && c.id !== b.column.id);
           const date = b.table.columns.find((c) => c.type === "date");
           const status = b.table.columns.find((c) => c.type === "select");
           const sorted = date ? [...b.rows].sort((x, y) => String(y.values[date.id] ?? "").localeCompare(String(x.values[date.id] ?? ""))) : [...b.rows].reverse();
@@ -243,7 +257,7 @@ export function RecordDialog({
                     >
                       <span className="w-24 shrink-0 text-ink-2">{date ? cellText(ws, b.table, date, r.values[date.id], settings) : ""}</span>
                       <span className="min-w-0 truncate">
-                        {title ? cellText(ws, b.table, title, r.values[title.id], settings) : rowLabel(b.table, r, settings)}
+                        {title ? `${title.type === "number" ? `${title.name}: ` : ""}${cellText(ws, b.table, title, r.values[title.id], settings)}` : ""}
                         {status && typeof r.values[status.id] === "string" && (
                           <span className="ml-2 text-xs">
                             <StatusMark value={r.values[status.id] as string} column={status} />

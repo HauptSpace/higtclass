@@ -1,5 +1,6 @@
 import { cellText, formatDateNumeric, parseDate, rowLabel, type Column, type Table } from "@higtclass/core";
 import { useId, useMemo, useRef, useState } from "react";
+import { readPhoto } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
 import { dateExample, useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
@@ -60,6 +61,8 @@ export function FieldInput({
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${value === "1" ? "left-6" : "left-1"}`} />
         </button>
       );
+    case "photo":
+      return <PhotoInput value={value} onChange={onChange} compact={compact} label={column.name} />;
     case "date":
       return <DateInput value={value} onChange={onChange} autoFocus={autoFocus} onKeyDown={onKeyDown} cls={cls} label={column.name} />;
     case "select": {
@@ -91,7 +94,7 @@ export function FieldInput({
                     key={o}
                     type="button"
                     aria-pressed={on}
-                    onClick={() => onChange(on ? "" : o)}
+                    onClick={() => onChange(o)}
                     className={`inline-flex items-center gap-1.5 rounded-full border-2 px-3 py-1 text-sm font-semibold transition ${
                       on ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                     }`}
@@ -125,6 +128,50 @@ export function FieldInput({
         <input className={cls} value={value} aria-label={column.name} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} autoFocus={autoFocus} />
       );
   }
+}
+
+/** A receipt photo: taken or picked, shrunk on the device, kept with the entry. */
+function PhotoInput({ value, onChange, compact, label }: { value: string; onChange: (v: string) => void; compact?: boolean; label: string }) {
+  const t = useT();
+  const file = useRef<HTMLInputElement>(null);
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {value && (
+        <a href={value} target="_blank" rel="noreferrer" title={label}>
+          <img src={value} alt={label} className={`${compact ? "h-8 w-8" : "h-24 w-24"} rounded-lg border-2 border-line object-cover`} />
+        </a>
+      )}
+      <button type="button" onClick={() => file.current?.click()} className="rounded-xl border-2 border-ink px-3 py-1.5 text-sm font-bold hover:bg-soft">
+        📷 {value ? t("photo.replace") : t("photo.add")}
+      </button>
+      {value && (
+        <button type="button" onClick={() => onChange("")} className="text-sm font-semibold text-ink-2 hover:text-late">
+          {t("photo.remove")}
+        </button>
+      )}
+      {failed && <span className="text-sm font-semibold text-late">{t("photo.failed")}</span>}
+      <input
+        ref={file}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          try {
+            const photo = await readPhoto(f, 1200);
+            setFailed(false);
+            onChange(photo.previewUrl);
+          } catch {
+            setFailed(true);
+          }
+        }}
+      />
+    </div>
+  );
 }
 
 /**
@@ -263,7 +310,7 @@ function LinkPicker({
         autoFocus={autoFocus}
         role="combobox"
         aria-expanded={open}
-        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);

@@ -10,6 +10,7 @@ import {
   NUMERIC_TYPES,
   optionsFor,
   updateCells,
+  type CellChange,
   type CellValue,
   type Column,
   type ColumnSummary,
@@ -155,7 +156,7 @@ export function GridView({
   const inRange = (r: number, c: number) => !!range && r >= range.r0 && r <= range.r1 && c >= range.c0 && c <= range.c1;
   const rangeSize = range ? (range.r1 - range.r0 + 1) * (range.c1 - range.c0 + 1) : 0;
 
-  const ctx = { locale: settings.locale, ws };
+  const ctx = { locale: settings.locale, ws, currency: settings.currency };
 
   const apply = useCallback(
     (op: Op, label: string, touched: string[]) => {
@@ -209,13 +210,13 @@ export function GridView({
     const original = draftOf(cols[pos.c], rows[pos.r]?.values[cols[pos.c].id], settings.locale);
     if (targets.length > 1 || editing.draft !== original) writeCells(targets, t("record.edit"));
     if (move) moveTo({ r: pos.r + move.dr, c: pos.c + move.dc }, false);
-    scroller.current?.focus();
+    scroller.current?.focus({ preventScroll: true });
   };
 
   const cancel = () => {
     settled.current = true;
     setEditing(null);
-    scroller.current?.focus();
+    scroller.current?.focus({ preventScroll: true });
   };
 
   const moveTo = (pos: Pos, extend: boolean) => {
@@ -426,7 +427,7 @@ export function GridView({
         onCopy={onCopy}
         onPaste={onPaste}
         style={{ outline: "none" }}
-        className="min-h-0 flex-1 overflow-auto"
+        className="min-h-0 flex-1 scroll-pt-12 scroll-pl-14 overflow-auto"
       >
         <table className="w-max min-w-full border-separate border-spacing-0 text-[15px]">
           <thead className="sticky top-0 z-20 bg-paper">
@@ -521,7 +522,7 @@ export function GridView({
                       onMouseDown: (e: React.MouseEvent) => {
                         if ((e.target as HTMLElement).closest("input,button")) return;
                         e.preventDefault();
-                        scroller.current?.focus();
+                        scroller.current?.focus({ preventScroll: true });
                         if (e.shiftKey && active) {
                           if (!anchor) setAnchor(active);
                           setActive({ r, c });
@@ -563,18 +564,30 @@ export function GridView({
                             aria-label={col.name}
                             className="h-[18px] w-[18px] accent-[var(--accent)]"
                             checked={checked}
-                            onChange={() =>
-                              apply(
-                                { type: "cells.set", tableId: table.id, cells: [{ rowId: row.id, columnId: col.id, value: checked ? null : true }] },
-                                t("record.edit"),
-                                [row.id],
-                              )
-                            }
+                            onChange={() => {
+                              const cells: CellChange[] = [{ rowId: row.id, columnId: col.id, value: checked ? null : true }];
+                              // Ticking "Paid" records today as the payment day if none is set.
+                              if (!checked && ledger?.paidColumnId === col.id && ledger.dateColumnId && !row.values[ledger.dateColumnId]) {
+                                cells.push({ rowId: row.id, columnId: ledger.dateColumnId, value: today });
+                              }
+                              apply({ type: "cells.set", tableId: table.id, cells }, t("record.edit"), [row.id]);
+                            }}
                           />
                         </td>
                       );
                     }
                     const value = row.values[col.id] ?? null;
+                    if (col.type === "photo") {
+                      return (
+                        <td key={col.id} className={base} {...cellProps}>
+                          {typeof value === "string" && value ? (
+                            <button type="button" onClick={() => onOpenRow(row.id)} aria-label={col.name}>
+                              <img src={value} alt="" className="h-7 w-7 rounded object-cover" />
+                            </button>
+                          ) : null}
+                        </td>
+                      );
+                    }
                     let text = cellText(ws, table, col, value, settings);
                     // Income and spending look different: +18 500 in green, −85 in ink.
                     const side = signed === col.id && typeof value === "number" && ledger ? rowSide(ledger, row.values) : null;

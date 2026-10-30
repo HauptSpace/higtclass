@@ -510,7 +510,11 @@ export function computeRow(table: Table, row: Row, today: string, ws?: Workspace
     const spec = col.rollup;
     const source = ws?.tables.find((t) => t.id === spec?.tableId);
     if (!spec || !source || !source.columns.some((c) => c.id === spec.linkColumnId)) return { error: "ref" };
-    const linked = linkedRowsIndex(source, spec.linkColumnId).get(row.id) ?? [];
+    const where = spec.where;
+    const linked = (linkedRowsIndex(source, spec.linkColumnId).get(row.id) ?? []).filter(
+      // Checkboxes compare as "true" / "" (not ticked).
+      (r) => !where || where.values.some((x) => x.toLowerCase() === String(r.values[where.columnId] === false ? "" : (r.values[where.columnId] ?? "")).toLowerCase()),
+    );
     if (spec.agg === "count") return { value: linked.length };
     const valueCol = source.columns.find((c) => c.id === spec.columnId);
     if (!valueCol) return { error: "ref" };

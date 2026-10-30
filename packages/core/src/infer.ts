@@ -21,7 +21,8 @@ const HEADER_CURRENCY: [RegExp, string][] = [
   [/\bchf\b/i, "CHF"],
 ];
 /** A row that totals the ones above it: skip it on import, Zifra totals by itself. */
-const TOTAL_ROW = /^(итого|итог|всего|разом|всього|підсумок|total|totals|sum|summe|gesamt|insgesamt|suma|totales?)\b[:.]?/i;
+// No \b: it doesn't work after Cyrillic letters ("Итого").
+const TOTAL_ROW = /^(итого|итог|всего|разом|всього|підсумок|total|totals|sum|summe|gesamt|insgesamt|suma|totales?)(?=$|[\s:.])/i;
 
 function isEmpty(v: RawCell): boolean {
   return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
@@ -158,12 +159,41 @@ export function decodeText(bytes: Uint8Array): string {
   }
 }
 
-/** Columns of a file matched to an existing table's columns by name. */
-export function matchImportColumns(plan: ImportPlan, columns: { id: string; name: string }[]): Record<string, string | null> {
+/**
+ * Columns of a file matched to an existing table's columns: by name first,
+ * then by kind — the file's only date goes to the table's date, its amount to
+ * the amount, its text ("Verwendungszweck") to the note.
+ */
+export function matchImportColumns(
+  plan: ImportPlan,
+  columns: { id: string; name: string; type: string }[],
+  amountId?: string,
+): Record<string, string | null> {
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-  return Object.fromEntries(
-    plan.columns.map((c) => [c.name, columns.find((x) => norm(x.name) === norm(c.name))?.id ?? null]),
-  );
+  const out: Record<string, string | null> = {};
+  const taken = new Set<string>();
+  for (const c of plan.columns) {
+    const hit = columns.find((x) => norm(x.name) === norm(c.name) && !taken.has(x.id));
+    out[c.name] = hit?.id ?? null;
+    if (hit) taken.add(hit.id);
+  }
+  const free = (type: string) => columns.filter((x) => x.type === type && !taken.has(x.id));
+  for (const c of plan.columns) {
+    if (out[c.name]) continue;
+    let target: { id: string } | undefined;
+    if (c.type === "date") target = free("date")[0];
+    else if (c.type === "money" || c.type === "number") {
+      target = columns.find((x) => x.id === amountId && !taken.has(x.id)) ?? free("money")[0] ?? free("number")[0];
+    } else if (c.type === "text") {
+      const texts = free("text");
+      target = texts.find((x) => /(коммент|комент|опис|note|notiz|nota|zweck|descr|beschreib)/i.test(x.name)) ?? texts.at(-1);
+    }
+    if (target) {
+      out[c.name] = target.id;
+      taken.add(target.id);
+    }
+  }
+  return out;
 }
 
 /** Minimal CSV reader: quotes, escaped quotes, newlines in quotes; `,` `;` or tab. */
