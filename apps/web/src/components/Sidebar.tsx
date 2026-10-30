@@ -1,7 +1,8 @@
-import { CURRENCIES, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
+import { currencyChoices, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
 import { useActiveTable, useStore, type Theme } from "../store.ts";
 import { useDueItems } from "./ForYou.tsx";
+import { reportName } from "./Reports.tsx";
 
 const NO_REPORTS: never[] = [];
 
@@ -32,6 +33,7 @@ export function Sidebar({
   const setSettings = useStore((s) => s.setSettings);
   const setActiveTable = useStore((s) => s.setActiveTable);
   const reports = useStore((s) => s.ws.reports) ?? NO_REPORTS;
+  const ws = useStore((s) => s.ws);
   const activeReportId = useStore((s) => s.activeReportId);
   const openReport = useStore((s) => s.openReport);
   const page = useStore((s) => s.page);
@@ -135,7 +137,7 @@ export function Sidebar({
                       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0 opacity-80">
                         <path d="M2 14h12M4 11V7M8 11V3M12 11V5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                       </svg>
-                      <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                      <span className="min-w-0 flex-1 truncate">{reportName(t, ws, r)}</span>
                     </button>
                   </li>
                 );
@@ -168,7 +170,7 @@ export function Sidebar({
           <label className="block text-xs text-rail-dim">
             {t("settings.currency")}
             <select className={`${railSelect} mt-1`} value={settings.currency} onChange={(e) => setSettings({ currency: e.target.value })}>
-              {CURRENCIES.map((c) => (
+              {currencyChoices(settings.locale, settings.currency).map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>

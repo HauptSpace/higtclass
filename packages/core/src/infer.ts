@@ -9,8 +9,19 @@ import { parseBoolean, parseDate, parseNumber } from "./values.ts";
 /** One raw cell from a file: what a spreadsheet reader hands back. */
 export type RawCell = string | number | boolean | Date | null | undefined;
 
-const MONEY_HEADER = /(сумм|сума|цен|ціна|стоим|вартість|оплат|выручк|виручк|доход|дохід|расход|витрат|итог|разом|баланс|долг|борг|price|amount|cost|total|revenue|income|expense|paid|balance|salary|betrag|preis|kosten|summe|umsatz|gehalt|importe|precio|coste|total|ingreso|gasto|saldo|salario|зарплат)/i;
+const MONEY_HEADER = /(сумм|сума|цен|ціна|стоим|вартість|оплат|выручк|виручк|доход|дохід|расход|витрат|итог|разом|баланс|долг|борг|закуп|себестоим|собівар|price|amount|cost|total|revenue|income|expense|paid|balance|salary|purchase|betrag|preis|kosten|summe|umsatz|gehalt|einkauf|importe|precio|coste|total|ingreso|gasto|saldo|salario|compra|зарплат)/i;
 const CURRENCY_MARK = /[₽₴$€£¥₸]|руб|грн|uah|rub|usd|eur/i;
+const HEADER_CURRENCY: [RegExp, string][] = [
+  [/€|\beur\b|евро|євро|euro/i, "EUR"],
+  [/\$|\busd\b|доллар|долар/i, "USD"],
+  [/₴|грн|\buah\b/i, "UAH"],
+  [/₽|руб|\brub\b/i, "RUB"],
+  [/£|\bgbp\b/i, "GBP"],
+  [/zł|\bpln\b/i, "PLN"],
+  [/\bchf\b/i, "CHF"],
+];
+/** A row that totals the ones above it: skip it on import, Zifra totals by itself. */
+const TOTAL_ROW = /^(итого|итог|всего|разом|всього|підсумок|total|totals|sum|summe|gesamt|insgesamt|suma|totales?)\b[:.]?/i;
 
 function isEmpty(v: RawCell): boolean {
   return v === null || v === undefined || (typeof v === "string" && v.trim() === "");
@@ -42,9 +53,10 @@ export function inferColumn(header: string, values: RawCell[], locale: Locale): 
   if (share((v) => typeof v === "boolean" || (typeof v === "string" && parseBoolean(v, locale) !== null)) >= 0.95) {
     return { name, type: "checkbox" };
   }
-  if (share((v) => typeof v === "number" || (typeof v === "string" && parseNumber(v, locale) !== null)) >= 0.9) {
-    const money = MONEY_HEADER.test(name) || present.some((v) => typeof v === "string" && CURRENCY_MARK.test(v));
-    return { name, type: money ? "money" : "number" };
+  if (share((v) => typeof v === "number" || (typeof v === "string" && parseNumber(v, locale, { money: true }) !== null)) >= 0.9) {
+    const money = MONEY_HEADER.test(name) || CURRENCY_MARK.test(name) || present.some((v) => typeof v === "string" && CURRENCY_MARK.test(v));
+    const currency = HEADER_CURRENCY.find(([re]) => re.test(name))?.[1];
+    return money ? { name, type: "money", ...(currency ? { currency } : {}) } : { name, type: "number" };
   }
   // Few distinct short values that repeat → a choice (status, category, city).
   const texts = present.map((v) => String(normalizeCell(v)));
@@ -61,18 +73,53 @@ export interface ImportPlan {
   columns: ColumnDraft[];
   /** Rows as raw records keyed by column name, ready for createTable. */
   rows: Record<string, string | number | boolean | null>[];
+  /** Index (among non-empty rows) of the row used as the header. */
+  headerRow: number;
+  /** "Итого" rows left out. */
+  skippedTotals: number;
+}
+
+const filled = (r: RawCell[]) => r.filter((c) => !isEmpty(c)).length;
+const looksLikeLabel = (c: RawCell) => typeof c === "string" && !/^[-+]?[\d\s.,]+$/.test(c.trim());
+
+/**
+ * Where the real header is. Bank exports start with a few lines about the
+ * account ("Kontonummer: …"); the header is the first row as wide as the data
+ * below it, made of labels rather than numbers.
+ */
+export function detectHeaderRow(grid: RawCell[][]): number {
+  const rows = grid.filter((r) => r.some((c) => !isEmpty(c)));
+  if (rows.length < 3) return 0;
+  const widths = rows.map(filled);
+  const counts = new Map<number, number>();
+  for (const w of widths) counts.set(w, (counts.get(w) ?? 0) + 1);
+  const typical = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+  for (let i = 0; i < Math.min(rows.length - 1, 30); i++) {
+    const cells = rows[i].filter((c) => !isEmpty(c));
+    if (cells.length >= Math.max(2, Math.ceil(typical * 0.8)) && cells.every(looksLikeLabel) && widths[i + 1] >= Math.ceil(typical * 0.5)) return i;
+  }
+  return 0;
 }
 
 /**
- * Build a table plan from a grid of cells. The first non-empty row is taken as
- * the header; fully empty rows and columns are dropped.
+ * Build a table plan from a grid of cells. The header is the first row that
+ * looks like one (or `headerRow`); fully empty rows and columns are dropped,
+ * and so are "Итого / Total" rows.
  */
-export function planImport(grid: RawCell[][], locale: Locale): ImportPlan {
-  const rows = grid.filter((r) => r.some((c) => !isEmpty(c)));
-  if (!rows.length) return { columns: [], rows: [] };
+export function planImport(grid: RawCell[][], locale: Locale, opts: { headerRow?: number } = {}): ImportPlan {
+  const all = grid.filter((r) => r.some((c) => !isEmpty(c)));
+  if (!all.length) return { columns: [], rows: [], headerRow: 0, skippedTotals: 0 };
+  const headerRow = Math.min(all.length - 1, Math.max(0, opts.headerRow ?? detectHeaderRow(all)));
+  const header = all[headerRow];
+  let body = all.slice(headerRow + 1);
+  const before = body.length;
+  body = body.filter((r) => {
+    const first = r.find((c) => !isEmpty(c));
+    return !(typeof first === "string" && TOTAL_ROW.test(first.trim()));
+  });
+  const skippedTotals = before - body.length;
+  const rows = [header, ...body];
   const width = Math.max(...rows.map((r) => r.length));
-  const header = rows[0];
-  const body = rows.slice(1);
   const keep = Array.from({ length: width }, (_, i) => !isEmpty(header[i]) || body.some((r) => !isEmpty(r[i])));
 
   const names: string[] = [];
@@ -90,7 +137,33 @@ export function planImport(grid: RawCell[][], locale: Locale): ImportPlan {
   return {
     columns,
     rows: body.map((r) => Object.fromEntries(indexes.map((i, k) => [names[k], normalizeCell(r[i])]))),
+    headerRow,
+    skippedTotals,
   };
+}
+
+/**
+ * Text of a CSV file whatever it was saved in: UTF-8, or the old Windows
+ * encodings German (1252) and Ukrainian/Russian (1251) banks still use.
+ */
+export function decodeText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    const cyr = new TextDecoder("windows-1251").decode(bytes);
+    const lat = new TextDecoder("windows-1252").decode(bytes);
+    const cyrLetters = (cyr.match(/[а-яёіїєґ]/giu) ?? []).length;
+    const latLetters = (lat.match(/[äöüßéèàáíóúñç]/giu) ?? []).length;
+    return cyrLetters > latLetters * 3 ? cyr : lat;
+  }
+}
+
+/** Columns of a file matched to an existing table's columns by name. */
+export function matchImportColumns(plan: ImportPlan, columns: { id: string; name: string }[]): Record<string, string | null> {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  return Object.fromEntries(
+    plan.columns.map((c) => [c.name, columns.find((x) => norm(x.name) === norm(c.name))?.id ?? null]),
+  );
 }
 
 /** Minimal CSV reader: quotes, escaped quotes, newlines in quotes; `,` `;` or tab. */

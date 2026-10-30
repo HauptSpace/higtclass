@@ -1,5 +1,5 @@
 import { renameFormulaRefs } from "./formula.ts";
-import type { CellValue, Column, Report, Row, Table, Workspace } from "./types.ts";
+import type { CellValue, Column, Report, Row, Table, TablePatch, Workspace } from "./types.ts";
 
 // Every change to a workspace is an operation. Operations are plain JSON,
 // applied by one pure function on every device and on the server, and each
@@ -17,7 +17,7 @@ export type ColumnPatch = Partial<Omit<Column, "id">>;
 export type Op =
   | { type: "table.create"; table: Table; index?: number }
   | { type: "table.delete"; tableId: string }
-  | { type: "table.update"; tableId: string; patch: { name?: string; icon?: string } }
+  | { type: "table.update"; tableId: string; patch: TablePatch }
   | { type: "column.add"; tableId: string; column: Column; index?: number }
   | { type: "column.update"; tableId: string; columnId: string; patch: ColumnPatch }
   | { type: "column.delete"; tableId: string; columnId: string }
@@ -93,7 +93,12 @@ export function applyOp(ws: Workspace, op: Op): Workspace {
       return { ...ws, tables: ws.tables.filter((t) => t.id !== op.tableId) };
 
     case "table.update":
-      return updateTable(ws, op.tableId, (t) => ({ ...t, ...op.patch }));
+      return updateTable(ws, op.tableId, (t) => {
+        const next: Table = { ...t, ...op.patch };
+        // `undefined` in a patch removes the field (that's how inverses clear a goal).
+        for (const [k, v] of Object.entries(op.patch)) if (v === undefined) delete (next as unknown as Record<string, unknown>)[k];
+        return next;
+      });
 
     case "column.add":
       return updateTable(ws, op.tableId, (t) => {
@@ -106,7 +111,11 @@ export function applyOp(ws: Workspace, op: Op): Workspace {
         const old = findColumn(t, op.columnId);
         const renamed = op.patch.name !== undefined && op.patch.name !== old.name;
         const columns = t.columns.map((c) => {
-          if (c.id === op.columnId) return { ...c, ...op.patch };
+          if (c.id === op.columnId) {
+            const next: Column = { ...c, ...op.patch };
+            for (const [k, v] of Object.entries(op.patch)) if (v === undefined) delete (next as unknown as Record<string, unknown>)[k];
+            return next;
+          }
           if (renamed && c.formula) return { ...c, formula: renameFormulaRefs(c.formula, old.name, op.patch.name!) };
           return c;
         });
@@ -116,7 +125,7 @@ export function applyOp(ws: Workspace, op: Op): Workspace {
     case "column.delete":
       return updateTable(ws, op.tableId, (t) => {
         findColumn(t, op.columnId);
-        return {
+        const next: Table = {
           ...t,
           columns: t.columns.filter((c) => c.id !== op.columnId),
           rows: t.rows.map((r) => {
@@ -125,6 +134,7 @@ export function applyOp(ws: Workspace, op: Op): Workspace {
             return { ...r, values };
           }),
         };
+        return next;
       });
 
     case "column.move":
@@ -212,10 +222,9 @@ export function invertOp(ws: Workspace, op: Op): Op {
 
     case "table.update": {
       const t = findTable(ws, op.tableId);
-      const patch: { name?: string; icon?: string } = {};
-      if (op.patch.name !== undefined) patch.name = t.name;
-      if (op.patch.icon !== undefined) patch.icon = t.icon;
-      return { type: "table.update", tableId: op.tableId, patch };
+      const patch: Record<string, unknown> = {};
+      for (const key of Object.keys(op.patch)) patch[key] = t[key as keyof TablePatch];
+      return { type: "table.update", tableId: op.tableId, patch: patch as TablePatch };
     }
 
     case "column.add":

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { summarizeTable, groupBy } from "./aggregate.ts";
 import { addRecords, changeColumnType, createTable, updateCells } from "./commands.ts";
 import { applyOp, applyWithInverse, type Op } from "./ops.ts";
-import { TEMPLATES } from "./templates.ts";
+import { instantiateTemplate, TEMPLATES } from "./templates.ts";
+import { validateFormula } from "./formula.ts";
 import type { Workspace } from "./types.ts";
 
 const ctx = { locale: "ru" as const, now: new Date(2026, 9, 29) };
@@ -105,8 +106,17 @@ describe("templates", () => {
   it.each(["ru", "uk", "en", "de", "es"] as const)("build cleanly in %s", (locale) => {
     expect(TEMPLATES.length).toBeGreaterThanOrEqual(8);
     for (const tpl of TEMPLATES) {
-      const res = createTable({ name: tpl.name[locale], icon: tpl.icon, columns: tpl.columns(locale) }, { locale });
-      expect(res.problems).toEqual([]);
+      const res = instantiateTemplate(tpl, locale, { locale });
+      const ws = applyOp({ tables: [] }, res.op);
+      expect(ws.tables.length).toBe(tpl.tables.length);
+      for (const table of ws.tables) {
+        for (const c of table.columns) {
+          if (c.type === "link") expect(ws.tables.some((x) => x.id === c.linkTableId)).toBe(true);
+          if (c.type === "lookup") expect(c.lookup).toBeTruthy();
+          if (c.type === "rollup") expect(c.rollup).toBeTruthy();
+          if (c.formula) expect(() => validateFormula(c.formula!)).not.toThrow();
+        }
+      }
     }
   });
 });

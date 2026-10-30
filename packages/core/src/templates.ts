@@ -1,10 +1,13 @@
-import type { ColumnDraft } from "./commands.ts";
-import type { Locale } from "./types.ts";
+import { createTable, type ColumnDraft, type CommandContext, type LedgerDraft } from "./commands.ts";
+import { findColumnByName } from "./formula.ts";
+import type { Op } from "./ops.ts";
+import type { Locale, RollupAgg, Table } from "./types.ts";
 
 // Ready-made starting points, so nobody faces an empty sheet.
 // Every name is translated; formulas are built from the translated names.
 // Each template also says why it beats a plain spreadsheet and when to pick it,
-// which is what the onboarding shows.
+// which is what the onboarding shows. Some templates are several linked
+// tables at once (stock + sales, clients + payments), wired up already.
 
 export type L10n = Record<Locale, string>;
 
@@ -17,16 +20,37 @@ const N = {
   category: tr("Категория", "Категорія", "Category", "Kategorie", "Categoría"),
   type: tr("Тип", "Тип", "Type", "Art", "Tipo"),
   item: tr("Товар", "Товар", "Item", "Artikel", "Artículo"),
+  sku: tr("Артикул", "Артикул", "SKU", "Artikelnr.", "Referencia"),
   qty: tr("Количество", "Кількість", "Quantity", "Menge", "Cantidad"),
   price: tr("Цена", "Ціна", "Price", "Preis", "Precio"),
+  cost: tr("Закупка", "Закупівля", "Cost price", "Einkaufspreis", "Coste"),
+  received: tr("Поступило", "Надійшло", "Received", "Zugang", "Entradas"),
+  sold: tr("Продано", "Продано", "Sold", "Verkauft", "Vendido"),
+  stock: tr("Остаток", "Залишок", "In stock", "Bestand", "Stock"),
+  revenue: tr("Выручка", "Виручка", "Revenue", "Umsatz", "Ingresos"),
+  margin: tr("Маржа", "Маржа", "Margin", "Marge", "Margen"),
+  channel: tr("Канал", "Канал", "Channel", "Kanal", "Canal"),
+  supplier: tr("Поставщик", "Постачальник", "Supplier", "Lieferant", "Proveedor"),
   total: tr("Итого", "Разом", "Total", "Summe", "Total"),
   client: tr("Клиент", "Клієнт", "Client", "Kunde", "Cliente"),
   name: tr("Имя", "Ім'я", "Name", "Name", "Nombre"),
+  title: tr("Название", "Назва", "Name", "Name", "Nombre"),
   company: tr("Компания", "Компанія", "Company", "Firma", "Empresa"),
   phone: tr("Телефон", "Телефон", "Phone", "Telefon", "Teléfono"),
+  city: tr("Город", "Місто", "City", "Ort", "Ciudad"),
+  address: tr("Адрес", "Адреса", "Address", "Adresse", "Dirección"),
+  contact: tr("Контакт", "Контакт", "Contact", "Ansprechpartner", "Contacto"),
   status: tr("Статус", "Статус", "Status", "Status", "Estado"),
   paid: tr("Оплачено", "Оплачено", "Paid", "Bezahlt", "Pagado"),
+  service: tr("Услуга", "Послуга", "Service", "Leistung", "Servicio"),
+  received_total: tr("Всего оплат", "Усього оплат", "Total billed", "Summe Zahlungen", "Total cobrado"),
   task: tr("Задача", "Завдання", "Task", "Aufgabe", "Tarea"),
+  job: tr("Работа", "Робота", "Job", "Auftrag", "Trabajo"),
+  worker: tr("Исполнитель", "Виконавець", "Assigned to", "Mitarbeiter", "Asignado a"),
+  hours: tr("Часы", "Години", "Hours", "Stunden", "Horas"),
+  rate: tr("Ставка в час", "Ставка за годину", "Hourly rate", "Stundensatz", "Tarifa por hora"),
+  fee: tr("Абонплата", "Абонплата", "Monthly fee", "Monatspauschale", "Cuota mensual"),
+  active: tr("Работает", "Працює", "Active", "Aktiv", "Activo"),
   owner: tr("Ответственный", "Відповідальний", "Owner", "Zuständig", "Responsable"),
   due: tr("Срок", "Термін", "Due", "Fällig", "Fecha límite"),
   done: tr("Готово", "Готово", "Done", "Erledigt", "Hecho"),
@@ -34,19 +58,83 @@ const N = {
   direction: tr("Кто должен", "Хто винен", "Who owes", "Wer schuldet", "Quién debe"),
   returned: tr("Вернули", "Повернули", "Settled", "Beglichen", "Devuelto"),
   lastContact: tr("Последний контакт", "Останній контакт", "Last contact", "Letzter Kontakt", "Último contacto"),
+  counterparty: tr("Кому / от кого", "Кому / від кого", "Paid to / from", "Kunde / Lieferant", "A quién / de quién"),
+  route: tr("Маршрут", "Маршрут", "Route", "Strecke", "Ruta"),
+  purpose: tr("Цель поездки", "Мета поїздки", "Purpose", "Zweck", "Motivo"),
+  km: tr("Км", "Км", "km", "km", "km"),
+  allowance: tr("Возмещение", "Відшкодування", "Allowance", "Pauschale", "Importe"),
 };
 
 const opts = (...items: L10n[]) => (l: Locale) => items.map((i) => i[l]);
 
-const expenseCategories = opts(
-  tr("Еда", "Їжа", "Food", "Essen", "Comida"),
-  tr("Транспорт", "Транспорт", "Transport", "Transport", "Transporte"),
-  tr("Дом", "Дім", "Home", "Wohnen", "Casa"),
-  tr("Связь", "Зв'язок", "Phone & internet", "Telefon & Internet", "Teléfono e internet"),
-  tr("Здоровье", "Здоров'я", "Health", "Gesundheit", "Salud"),
-  tr("Развлечения", "Розваги", "Fun", "Freizeit", "Ocio"),
-  tr("Другое", "Інше", "Other", "Sonstiges", "Otros"),
-);
+const INCOME = tr("Доход", "Дохід", "Income", "Einnahme", "Ingreso");
+const EXPENSE = tr("Расход", "Витрата", "Expense", "Ausgabe", "Gasto");
+
+/**
+ * Categories with the words people use for them, so "кава 85" or "Taxi 450"
+ * lands in the right category without the assistant.
+ */
+export interface CategoryDef {
+  name: L10n;
+  words: RegExp;
+}
+
+const cat = (name: L10n, words: RegExp): CategoryDef => ({ name, words });
+
+export const PERSONAL_EXPENSES: CategoryDef[] = [
+  cat(tr("Еда", "Їжа", "Food", "Essen", "Comida"), /(еда|продукт|кофе|кава|кафе|обед|обід|ужин|вечер|ресторан|магазин|сільпо|атб|novus|пицц|піц|шаурм|хлеб|хліб|молок|groceries|food|coffee|lunch|dinner|restaurant|supermarket|lebensmittel|essen|kaffee|rewe|lidl|aldi|edeka|comida|café|cafe|cena|almuerzo|super|mercadona)/i),
+  cat(tr("Транспорт", "Транспорт", "Transport", "Transport", "Transporte"), /(такси|таксі|taxi|uber|bolt|uklon|уклон|метро|автобус|маршрутк|бензин|топлив|пальн|заправ|парков|поезд|потяг|квиток|билет|fuel|petrol|gas station|bus|train|ticket|parking|benzin|tanken|bahn|ticket|gasolina|tren|aparcamiento)/i),
+  cat(tr("Дом", "Дім", "Home", "Wohnen", "Casa"), /(квартир|аренд|оренд|комунал|коммунал|свет|світло|газ|вода|ремонт|rent|electric|utilities|miete|strom|nebenkosten|alquiler|luz|agua)/i),
+  cat(tr("Связь", "Зв'язок", "Phone & internet", "Telefon & Internet", "Teléfono e internet"), /(связь|зв.язок|телефон|мобильн|мобільн|интернет|інтернет|київстар|киевстар|vodafone|lifecell|phone|internet|mobile|handy|telekom|o2|teléfono|movistar)/i),
+  cat(tr("Здоровье", "Здоров'я", "Health", "Gesundheit", "Salud"), /(аптек|лекарств|ліки|врач|лікар|стоматолог|анализ|аналіз|pharmacy|doctor|dentist|apotheke|arzt|farmacia|médico|dentista)/i),
+  cat(tr("Развлечения", "Розваги", "Fun", "Freizeit", "Ocio"), /(кино|кіно|театр|концерт|бар|клуб|игр|ігр|netflix|spotify|cinema|movie|bar|games|kino|freizeit|cine|ocio)/i),
+  cat(tr("Другое", "Інше", "Other", "Sonstiges", "Otros"), /^$/),
+];
+
+export const PERSONAL_INCOME: CategoryDef[] = [
+  cat(tr("Зарплата", "Зарплата", "Salary", "Gehalt", "Sueldo"), /(зарплат|зп|аванс|salary|wage|payday|gehalt|lohn|sueldo|nómina|nomina)/i),
+  cat(tr("Подработка", "Підробіток", "Side job", "Nebenjob", "Extra"), /(подработ|підробіт|халтур|фриланс|freelance|side|nebenjob|extra)/i),
+  cat(tr("Подарок", "Подарунок", "Gift", "Geschenk", "Regalo"), /(подар|gift|geschenk|regalo)/i),
+  cat(tr("Другой доход", "Інший дохід", "Other income", "Sonstige Einnahme", "Otro ingreso"), /^$/),
+];
+
+export const BUSINESS_EXPENSES: CategoryDef[] = [
+  cat(tr("Материалы и товар", "Матеріали й товар", "Materials & goods", "Material & Waren", "Material y mercancía"), /(материал|матеріал|товар|закуп|material|waren|einkauf|baumarkt|obi|hornbach|stock|mercanc)/i),
+  cat(tr("Инструмент и техника", "Інструмент і техніка", "Tools & equipment", "Werkzeug & Geräte", "Herramientas y equipos"), /(инструмент|інструмент|дрель|дриль|ноутбук|компьютер|комп.ютер|техник|техніка|tool|laptop|equipment|werkzeug|gerät|bohrer|herramient|equipo)/i),
+  cat(tr("Авто и топливо", "Авто й пальне", "Car & fuel", "Kfz & Kraftstoff", "Coche y combustible"), /(бензин|топлив|пальн|заправ|дизел|авто|машин|ремонт авто|парков|fuel|petrol|diesel|car|parking|tanken|benzin|kfz|werkstatt|gasolina|coche)/i),
+  cat(tr("Связь и интернет", "Зв'язок та інтернет", "Phone & internet", "Telefon & Internet", "Teléfono e internet"), /(связь|зв.язок|телефон|интернет|інтернет|phone|internet|handy|telekom|vodafone|o2|teléfono)/i),
+  cat(tr("Программы и сервисы", "Програми й сервіси", "Software & services", "Software & Dienste", "Software y servicios"), /(подписк|підписк|софт|програм|сервис|сервіс|хостинг|домен|software|subscription|hosting|domain|abo|lizenz|suscripci)/i),
+  cat(tr("Аренда", "Оренда", "Rent", "Miete & Raum", "Alquiler"), /(аренд|оренд|офис|офіс|склад|rent|office|miete|büro|lager|alquiler|oficina)/i),
+  cat(tr("Реклама", "Реклама", "Advertising", "Werbung", "Publicidad"), /(реклам|таргет|ads|advert|marketing|werbung|anzeige|publicidad)/i),
+  cat(tr("Страховки", "Страховки", "Insurance", "Versicherungen", "Seguros"), /(страхов|insurance|versicherung|seguro)/i),
+  cat(tr("Налоги и взносы", "Податки й внески", "Taxes & contributions", "Steuern & Beiträge", "Impuestos y cuotas"), /(налог|податок|податк|есв|єсв|взнос|внесок|tax|finanzamt|steuer|beitrag|impuesto|cuota)/i),
+  cat(tr("Прочие расходы", "Інші витрати", "Other costs", "Sonstige Ausgaben", "Otros gastos"), /^$/),
+];
+
+export const BUSINESS_INCOME: CategoryDef[] = [
+  cat(tr("Услуги", "Послуги", "Services", "Dienstleistungen", "Servicios"), /(услуг|послуг|работ|робот|заказ|замовлен|монтаж|сборк|збірк|ремонт|дизайн|консульт|урок|уборк|прибиран|service|job|montage|aufbau|reparatur|installation|beratung|unterricht|reinigung|auftrag|leistung|honorar|rechnung|design|consult|lesson|cleaning|invoice|servicio|trabajo|limpieza|factura)/i),
+  cat(tr("Продажи", "Продажі", "Sales", "Verkauf", "Ventas"), /(продаж|продал|sale|sold|verkauf|venta)/i),
+  cat(tr("Прочий доход", "Інший дохід", "Other income", "Sonstige Einnahmen", "Otros ingresos"), /^$/),
+];
+
+export const ALL_CATEGORIES: CategoryDef[] = [...PERSONAL_EXPENSES, ...PERSONAL_INCOME, ...BUSINESS_EXPENSES, ...BUSINESS_INCOME];
+
+/** A category column whose choices depend on the Type: income categories for income, the rest for expenses. */
+function categoryColumn(l: Locale, income: CategoryDef[], expense: CategoryDef[]): ColumnDraft {
+  const map: Record<string, string> = {};
+  for (const c of income) map[c.name[l]] = INCOME[l];
+  for (const c of expense) map[c.name[l]] = EXPENSE[l];
+  return {
+    name: N.category[l],
+    type: "select",
+    options: [...expense, ...income].map((c) => c.name[l]),
+    scope: { column: N.type[l], map },
+  };
+}
+
+function typeColumn(l: Locale): ColumnDraft {
+  return { name: N.type[l], type: "select", options: [INCOME[l], EXPENSE[l]], default: EXPENSE[l], optionColors: { [INCOME[l]]: "var(--paid)" } };
+}
 
 /** What the person told the onboarding they want Zifra for. */
 export type UseCase = "personal" | "trade" | "services" | "team" | "finance" | "other";
@@ -103,13 +191,13 @@ export const USE_CASES: { id: UseCase; icon: string; name: L10n; hint: L10n }[] 
   {
     id: "finance",
     icon: "≡",
-    name: tr("Финансы компании", "Фінанси компанії", "Company finances", "Firmenfinanzen", "Finanzas de la empresa"),
+    name: tr("Деньги бизнеса", "Гроші бізнесу", "Business money", "Firmenfinanzen", "Finanzas del negocio"),
     hint: tr(
-      "Доходы, расходы, должники, отчёт бухгалтеру",
-      "Доходи, витрати, боржники, звіт бухгалтеру",
-      "Income, costs, who owes you, reports for the accountant",
-      "Einnahmen, Kosten, offene Posten, Berichte für die Buchhaltung",
-      "Ingresos, gastos, deudores, informes para el contable",
+      "Доходы, расходы, налоги, отчёт бухгалтеру",
+      "Доходи, витрати, податки, звіт бухгалтеру",
+      "Income, costs, taxes, reports for the accountant",
+      "Einnahmen, Ausgaben, Steuern, Unterlagen für den Steuerberater",
+      "Ingresos, gastos, impuestos, informes para el contable",
     ),
   },
   {
@@ -126,6 +214,23 @@ export const USE_CASES: { id: UseCase; icon: string; name: L10n; hint: L10n }[] 
   },
 ];
 
+/** A column of a template table; links and totals refer to other tables of the same template by key. */
+export interface TemplateColumn extends ColumnDraft {
+  linkTo?: string;
+  /** "From link": show `column` of the row linked through `via`. */
+  lookupOf?: { via: string; column: string };
+  /** Total over the rows of table `table` that link here through its column `via`. */
+  rollupOf?: { table: string; via: string; column: string | null; agg: RollupAgg };
+}
+
+export interface TemplateTable {
+  key: string;
+  name: L10n;
+  icon: string;
+  columns: (l: Locale) => TemplateColumn[];
+  ledger?: (l: Locale) => LedgerDraft;
+}
+
 export interface Template {
   id: string;
   icon: string;
@@ -136,15 +241,169 @@ export interface Template {
   why: L10n;
   /** The situation it fits. */
   when: L10n;
-  columns: (l: Locale) => ColumnDraft[];
+  /** Tables in creation order; links point to earlier ones. */
+  tables: TemplateTable[];
+  /** Key of the table to open after creating. */
+  main: string;
+  /** Ask for a savings target right away. */
+  goal?: boolean;
 }
+
+const one = (
+  key: string,
+  name: L10n,
+  icon: string,
+  columns: (l: Locale) => TemplateColumn[],
+  ledger?: (l: Locale) => LedgerDraft,
+): TemplateTable[] => [{ key, name, icon, columns, ledger }];
+
+const bothLedger = (l: Locale): LedgerDraft => ({ amount: N.amount[l], kind: "both", type: N.type[l], incomeValues: [INCOME[l]] });
 
 export const TEMPLATES: Template[] = [
   {
+    id: "budget",
+    icon: "≡",
+    uses: ["personal"],
+    name: tr("Доходы и расходы", "Доходи та витрати", "Income & expenses", "Einnahmen & Ausgaben", "Ingresos y gastos"),
+    description: tr(
+      "Сколько пришло, сколько ушло и сколько осталось",
+      "Скільки прийшло, скільки пішло і скільки лишилось",
+      "What came in, what went out, and what's left",
+      "Was reinkam, was rausging und was übrig bleibt",
+      "Lo que entra, lo que sale y lo que queda",
+    ),
+    why: tr(
+      "Сверху сразу видно: доход, траты и остаток за месяц. Напишите «кофе 85» — Zifra сама поставит категорию.",
+      "Зверху одразу видно: дохід, витрати й залишок за місяць. Напишіть «кава 85» — Zifra сама поставить категорію.",
+      "Income, spending and what's left this month, right on top. Type “coffee 4.50” and Zifra picks the category.",
+      "Einnahmen, Ausgaben und Rest des Monats stehen oben. Tippen Sie „Kaffee 3,50“ — Zifra wählt die Kategorie.",
+      "Arriba ves ingresos, gastos y lo que queda este mes. Escribe «café 2,50» y Zifra pone la categoría.",
+    ),
+    when: tr(
+      "Хотите понимать, сколько приходит и куда уходит.",
+      "Хочете розуміти, скільки надходить і куди йде.",
+      "You want to see what comes in and where it goes.",
+      "Sie wollen sehen, was reinkommt und wohin es geht.",
+      "Quieres ver cuánto entra y adónde va.",
+    ),
+    main: "main",
+    tables: one(
+      "main",
+      tr("Доходы и расходы", "Доходи та витрати", "Income & expenses", "Einnahmen & Ausgaben", "Ingresos y gastos"),
+      "≡",
+      (l) => [
+        { name: N.date[l], type: "date" },
+        typeColumn(l),
+        categoryColumn(l, PERSONAL_INCOME, PERSONAL_EXPENSES),
+        { name: N.amount[l], type: "money" },
+        { name: N.note[l], type: "text" },
+      ],
+      bothLedger,
+    ),
+  },
+  {
+    id: "business",
+    icon: "≡",
+    uses: ["finance", "services", "trade"],
+    name: tr("Доходы и расходы бизнеса", "Доходи та витрати бізнесу", "Business income & costs", "Einnahmen & Ausgaben (EÜR)", "Ingresos y gastos del negocio"),
+    description: tr(
+      "Книга доходов и расходов с категориями для бухгалтера",
+      "Книга доходів і витрат з категоріями для бухгалтера",
+      "Income and costs with categories your accountant expects",
+      "Einnahmen und Ausgaben mit Kategorien für den Steuerberater",
+      "Ingresos y gastos con las categorías que pide el contable",
+    ),
+    why: tr(
+      "Прибыль за месяц и квартал считается сама. Выгрузка в Excel — с итогами по категориям.",
+      "Прибуток за місяць і квартал рахується сам. Вивантаження в Excel — з підсумками за категоріями.",
+      "Profit per month and quarter works itself out. The Excel export has totals by category.",
+      "Gewinn pro Monat und Quartal rechnet sich selbst. Der Excel-Export hat Summen pro Kategorie.",
+      "El beneficio por mes y trimestre sale solo. La exportación a Excel trae totales por categoría.",
+    ),
+    when: tr(
+      "Вы ФОП, самозанятый или маленькая фирма и сдаёте отчёт.",
+      "Ви ФОП, самозайнятий чи маленька фірма і здаєте звіт.",
+      "You're self-employed or a small firm and file tax returns.",
+      "Sie sind selbstständig oder eine kleine Firma und machen eine EÜR.",
+      "Eres autónomo o una pequeña empresa y presentas impuestos.",
+    ),
+    main: "main",
+    tables: one(
+      "main",
+      tr("Доходы и расходы бизнеса", "Доходи та витрати бізнесу", "Business income & costs", "Einnahmen & Ausgaben", "Ingresos y gastos"),
+      "≡",
+      (l) => [
+        { name: N.date[l], type: "date" },
+        typeColumn(l),
+        categoryColumn(l, BUSINESS_INCOME, BUSINESS_EXPENSES),
+        { name: N.amount[l], type: "money" },
+        { name: N.counterparty[l], type: "text" },
+        { name: N.note[l], type: "text" },
+      ],
+      bothLedger,
+    ),
+  },
+  {
+    id: "clients_payments",
+    icon: "◎",
+    uses: ["services", "finance"],
+    name: tr("Клиенты и оплаты", "Клієнти та оплати", "Clients & payments", "Kunden & Zahlungen", "Clientes y cobros"),
+    description: tr(
+      "Две связанные таблицы: клиенты и их оплаты",
+      "Дві пов'язані таблиці: клієнти та їхні оплати",
+      "Two linked tables: clients and what they paid",
+      "Zwei verknüpfte Tabellen: Kunden und ihre Zahlungen",
+      "Dos tablas enlazadas: clientes y lo que pagaron",
+    ),
+    why: tr(
+      "У каждого клиента видна сумма всех оплат. Налог считается только с полученных денег.",
+      "У кожного клієнта видно суму всіх оплат. Податок рахується тільки з отриманих грошей.",
+      "Every client shows what they've paid in total. Tax counts only money actually received.",
+      "Bei jedem Kunden steht die Summe seiner Zahlungen. Steuer zählt nur, was wirklich eingegangen ist.",
+      "Cada cliente muestra el total cobrado. Los impuestos cuentan solo lo recibido.",
+    ),
+    when: tr(
+      "Работаете с постоянными клиентами и выставляете счета.",
+      "Працюєте з постійними клієнтами й виставляєте рахунки.",
+      "You work with regular clients and send invoices.",
+      "Sie haben Stammkunden und schreiben Rechnungen.",
+      "Trabajas con clientes habituales y emites facturas.",
+    ),
+    main: "payments",
+    tables: [
+      {
+        key: "clients",
+        name: tr("Клиенты", "Клієнти", "Clients", "Kunden", "Clientes"),
+        icon: "◉",
+        columns: (l) => [
+          { name: N.name[l], type: "text" },
+          { name: N.city[l], type: "text" },
+          { name: N.phone[l], type: "text" },
+          { name: N.received_total[l], type: "rollup", rollupOf: { table: "payments", via: N.client[l], column: N.amount[l], agg: "sum" } },
+          { name: N.note[l], type: "text" },
+        ],
+      },
+      {
+        key: "payments",
+        name: tr("Оплаты", "Оплати", "Payments", "Zahlungen", "Cobros"),
+        icon: "◎",
+        columns: (l) => [
+          { name: N.date[l], type: "date" },
+          { name: N.client[l], type: "link", linkTo: "clients" },
+          { name: N.service[l], type: "text" },
+          { name: N.amount[l], type: "money" },
+          { name: N.paid[l], type: "checkbox" },
+          { name: N.note[l], type: "text" },
+        ],
+        ledger: (l) => ({ amount: N.amount[l], kind: "income", paid: N.paid[l] }),
+      },
+    ],
+  },
+  {
     id: "orders",
     icon: "◎",
-    uses: ["services", "trade", "finance"],
-    name: tr("Клиенты и заказы", "Клієнти та замовлення", "Clients & orders", "Kunden & Aufträge", "Clientes y pedidos"),
+    uses: ["services", "trade"],
+    name: tr("Заказы", "Замовлення", "Orders", "Aufträge", "Pedidos"),
     description: tr(
       "Кто заказал, сколько и оплатил ли",
       "Хто замовив, скільки та чи оплатив",
@@ -160,27 +419,97 @@ export const TEMPLATES: Template[] = [
       "Estado y pago con un toque, no con colores de celda. Lo pendiente salta a la vista.",
     ),
     when: tr(
-      "У вас есть клиенты и вы берёте деньги за работу или товар.",
-      "У вас є клієнти, і ви берете гроші за роботу чи товар.",
-      "You have clients and get paid for work or goods.",
-      "Sie haben Kunden und werden für Arbeit oder Ware bezahlt.",
-      "Tienes clientes y cobras por trabajo o productos.",
+      "Берёте заказы и хотите видеть, что в работе и что не оплачено.",
+      "Берете замовлення й хочете бачити, що в роботі і що не оплачено.",
+      "You take orders and want to see what's in progress and what's unpaid.",
+      "Sie nehmen Aufträge an und wollen sehen, was läuft und was offen ist.",
+      "Recibes pedidos y quieres ver qué está en curso y qué falta cobrar.",
     ),
-    columns: (l) => [
-      { name: N.date[l], type: "date" },
-      { name: N.client[l], type: "text" },
-      { name: N.item[l], type: "text" },
-      { name: N.amount[l], type: "money" },
+    main: "main",
+    tables: one(
+      "main",
+      tr("Заказы", "Замовлення", "Orders", "Aufträge", "Pedidos"),
+      "◎",
+      (l) => [
+        { name: N.date[l], type: "date" },
+        { name: N.client[l], type: "text" },
+        { name: N.item[l], type: "text" },
+        { name: N.amount[l], type: "money" },
+        {
+          name: N.status[l],
+          type: "select",
+          options: opts(
+            tr("Новый", "Новий", "New", "Neu", "Nuevo"),
+            tr("В работе", "В роботі", "In progress", "In Arbeit", "En curso"),
+            tr("Готов", "Готовий", "Done", "Fertig", "Listo"),
+          )(l),
+        },
+        { name: N.paid[l], type: "checkbox" },
+      ],
+      (l) => ({ amount: N.amount[l], kind: "income", paid: N.paid[l] }),
+    ),
+  },
+  {
+    id: "stock_sales",
+    icon: "▤",
+    uses: ["trade"],
+    name: tr("Склад и продажи", "Склад і продажі", "Stock & sales", "Lager & Verkäufe", "Stock y ventas"),
+    description: tr(
+      "Товары и продажи: остаток и маржа считаются сами",
+      "Товари й продажі: залишок і маржа рахуються самі",
+      "Products and sales: stock and margin work themselves out",
+      "Artikel und Verkäufe: Bestand und Marge rechnen sich selbst",
+      "Productos y ventas: stock y margen se calculan solos",
+    ),
+    why: tr(
+      "Продали — остаток уменьшился сам. Цена и закупка подтягиваются из товара, маржа видна по каждой продаже.",
+      "Продали — залишок зменшився сам. Ціна й закупівля підтягуються з товару, маржа видна з кожного продажу.",
+      "Sell something and the stock goes down by itself. Price and cost come from the product; margin shows on every sale.",
+      "Verkauft — der Bestand sinkt von selbst. Preis und Einkauf kommen vom Artikel, die Marge steht bei jedem Verkauf.",
+      "Vendes y el stock baja solo. Precio y coste vienen del producto; el margen se ve en cada venta.",
+    ),
+    when: tr(
+      "Продаёте товары (маркетплейсы, Instagram, магазин) и ведёте склад.",
+      "Продаєте товари (маркетплейси, Instagram, магазин) і ведете склад.",
+      "You sell products (marketplaces, Instagram, a shop) and keep stock.",
+      "Sie verkaufen Waren (Marktplätze, Instagram, Laden) und führen ein Lager.",
+      "Vendes productos (marketplaces, Instagram, tienda) y llevas stock.",
+    ),
+    main: "sales",
+    tables: [
       {
-        name: N.status[l],
-        type: "select",
-        options: opts(
-          tr("Новый", "Новий", "New", "Neu", "Nuevo"),
-          tr("В работе", "В роботі", "In progress", "In Arbeit", "En curso"),
-          tr("Готов", "Готовий", "Done", "Fertig", "Listo"),
-        )(l),
+        key: "products",
+        name: tr("Товары", "Товари", "Products", "Artikel", "Productos"),
+        icon: "▤",
+        columns: (l) => [
+          { name: N.item[l], type: "text" },
+          { name: N.sku[l], type: "text" },
+          { name: N.category[l], type: "select", options: [] },
+          { name: N.cost[l], type: "money" },
+          { name: N.price[l], type: "money" },
+          { name: N.received[l], type: "number" },
+          { name: N.sold[l], type: "rollup", rollupOf: { table: "sales", via: N.item[l], column: N.qty[l], agg: "sum" } },
+          { name: N.stock[l], type: "formula", formula: `[${N.received[l]}] - [${N.sold[l]}]`, format: "number" },
+          { name: N.supplier[l], type: "text" },
+        ],
       },
-      { name: N.paid[l], type: "checkbox" },
+      {
+        key: "sales",
+        name: tr("Продажи", "Продажі", "Sales", "Verkäufe", "Ventas"),
+        icon: "◎",
+        columns: (l) => [
+          { name: N.date[l], type: "date" },
+          { name: N.item[l], type: "link", linkTo: "products" },
+          { name: N.qty[l], type: "number", default: 1 },
+          { name: N.price[l], type: "lookup", lookupOf: { via: N.item[l], column: N.price[l] } },
+          { name: N.amount[l], type: "formula", formula: `[${N.qty[l]}] * [${N.price[l]}]` },
+          { name: N.cost[l], type: "lookup", lookupOf: { via: N.item[l], column: N.cost[l] } },
+          { name: N.margin[l], type: "formula", formula: `[${N.amount[l]}] - [${N.qty[l]}] * [${N.cost[l]}]` },
+          { name: N.channel[l], type: "select", options: ["Instagram", tr("Маркетплейс", "Маркетплейс", "Marketplace", "Marktplatz", "Marketplace")[l], tr("Магазин", "Магазин", "Shop", "Laden", "Tienda")[l], tr("Сайт", "Сайт", "Website", "Webshop", "Web")[l]] },
+          { name: N.paid[l], type: "checkbox", default: true },
+        ],
+        ledger: (l) => ({ amount: N.amount[l], kind: "income", paid: N.paid[l] }),
+      },
     ],
   },
   {
@@ -209,11 +538,91 @@ export const TEMPLATES: Template[] = [
       "Sie müssen wissen, was auf Lager ist und was es wert ist.",
       "Necesitas saber qué hay en stock y cuánto vale.",
     ),
-    columns: (l) => [
+    main: "main",
+    tables: one("main", tr("Склад", "Склад", "Inventory", "Lager", "Inventario"), "▤", (l) => [
       { name: N.item[l], type: "text" },
       { name: N.qty[l], type: "number" },
       { name: N.price[l], type: "money" },
       { name: N.total[l], type: "formula", formula: `[${N.qty[l]}] * [${N.price[l]}]` },
+    ]),
+  },
+  {
+    id: "team_jobs",
+    icon: "▦",
+    uses: ["team", "services"],
+    name: tr("Работы и команда", "Роботи та команда", "Jobs & team", "Aufträge & Team", "Trabajos y equipo"),
+    description: tr(
+      "Клиенты, сотрудники и работы — связаны между собой",
+      "Клієнти, працівники й роботи — пов'язані між собою",
+      "Clients, staff and jobs — linked together",
+      "Kunden, Mitarbeiter und Aufträge — miteinander verknüpft",
+      "Clientes, personal y trabajos, enlazados",
+    ),
+    why: tr(
+      "У клиента видна выручка, у сотрудника — часы. Неделя, статусы и проблемы — на одной доске.",
+      "У клієнта видно виручку, у працівника — години. Тиждень, статуси й проблеми — на одній дошці.",
+      "Each client shows revenue, each person their hours. The week, statuses and problems on one board.",
+      "Jeder Kunde zeigt den Umsatz, jeder Mitarbeiter seine Stunden. Woche, Status und Probleme auf einem Board.",
+      "Cada cliente muestra sus ingresos y cada persona sus horas. Semana, estados y problemas en un tablero.",
+    ),
+    when: tr(
+      "У вас бригада или небольшая команда, которая ездит к клиентам.",
+      "У вас бригада чи невелика команда, що їздить до клієнтів.",
+      "You run a crew or small team that works at clients' places.",
+      "Sie haben ein kleines Team, das bei Kunden arbeitet.",
+      "Tienes un equipo pequeño que trabaja en casa de los clientes.",
+    ),
+    main: "jobs",
+    tables: [
+      {
+        key: "clients",
+        name: tr("Клиенты", "Клієнти", "Clients", "Kunden", "Clientes"),
+        icon: "◉",
+        columns: (l) => [
+          { name: N.title[l], type: "text" },
+          { name: N.address[l], type: "text" },
+          { name: N.contact[l], type: "text" },
+          { name: N.fee[l], type: "money" },
+          { name: N.revenue[l], type: "rollup", rollupOf: { table: "jobs", via: N.client[l], column: N.price[l], agg: "sum" } },
+        ],
+      },
+      {
+        key: "staff",
+        name: tr("Сотрудники", "Працівники", "Staff", "Mitarbeiter", "Personal"),
+        icon: "◐",
+        columns: (l) => [
+          { name: N.name[l], type: "text" },
+          { name: N.phone[l], type: "text" },
+          { name: N.rate[l], type: "money" },
+          { name: N.hours[l], type: "rollup", rollupOf: { table: "jobs", via: N.worker[l], column: N.hours[l], agg: "sum" } },
+          { name: N.active[l], type: "checkbox", default: true },
+        ],
+      },
+      {
+        key: "jobs",
+        name: tr("Работы", "Роботи", "Jobs", "Aufträge", "Trabajos"),
+        icon: "▦",
+        columns: (l) => [
+          { name: N.job[l], type: "text" },
+          { name: N.client[l], type: "link", linkTo: "clients" },
+          { name: N.worker[l], type: "link", linkTo: "staff" },
+          { name: N.date[l], type: "date" },
+          {
+            name: N.status[l],
+            type: "select",
+            options: opts(
+              tr("Запланировано", "Заплановано", "Planned", "Geplant", "Planificado"),
+              tr("В работе", "В роботі", "In progress", "In Arbeit", "En curso"),
+              tr("Готово", "Готово", "Done", "Erledigt", "Hecho"),
+              tr("Проблема", "Проблема", "Problem", "Problem", "Problema"),
+            )(l),
+            default: tr("Запланировано", "Заплановано", "Planned", "Geplant", "Planificado")[l],
+          },
+          { name: N.hours[l], type: "number" },
+          { name: N.price[l], type: "money" },
+        ],
+        ledger: (l) => ({ amount: N.price[l], kind: "income" }),
+      },
     ],
   },
   {
@@ -242,7 +651,8 @@ export const TEMPLATES: Template[] = [
       "Sie haben mehr Kunden, als Sie im Kopf behalten können.",
       "Tienes más clientes de los que caben en la cabeza.",
     ),
-    columns: (l) => [
+    main: "main",
+    tables: one("main", tr("База клиентов", "База клієнтів", "Client list", "Kundenliste", "Lista de clientes"), "◉", (l) => [
       { name: N.name[l], type: "text" },
       { name: N.company[l], type: "text" },
       { name: N.phone[l], type: "text" },
@@ -257,7 +667,7 @@ export const TEMPLATES: Template[] = [
       },
       { name: N.lastContact[l], type: "date" },
       { name: N.note[l], type: "text" },
-    ],
+    ]),
   },
   {
     id: "tasks",
@@ -272,11 +682,11 @@ export const TEMPLATES: Template[] = [
       "Quién hace qué y para cuándo",
     ),
     why: tr(
-      "Галочка «Готово» и срок вместо зачёркнутого текста. Видно, что горит.",
-      "Галочка «Готово» і термін замість закресленого тексту. Видно, що горить.",
-      "A Done checkbox and a due date instead of strikethrough text. You see what's late.",
-      "Ein Erledigt-Häkchen und ein Termin statt durchgestrichenem Text. Man sieht, was brennt.",
-      "Casilla de hecho y fecha límite en vez de texto tachado. Ves lo que urge.",
+      "Доска по статусам и календарь сроков вместо зачёркнутого текста. Видно, что горит.",
+      "Дошка за статусами й календар термінів замість закресленого тексту. Видно, що горить.",
+      "A board by status and a calendar of due dates instead of strikethrough text. You see what's late.",
+      "Ein Board nach Status und ein Terminkalender statt durchgestrichenem Text. Man sieht, was brennt.",
+      "Un tablero por estado y un calendario de fechas en vez de texto tachado. Ves lo que urge.",
     ),
     when: tr(
       "Работаете не один и важно, кто за что отвечает.",
@@ -285,7 +695,8 @@ export const TEMPLATES: Template[] = [
       "Sie arbeiten im Team und müssen wissen, wer wofür zuständig ist.",
       "Trabajas en equipo y necesitas saber quién se encarga de qué.",
     ),
-    columns: (l) => [
+    main: "main",
+    tables: one("main", tr("Задачи команды", "Завдання команди", "Team tasks", "Team-Aufgaben", "Tareas del equipo"), "▦", (l) => [
       { name: N.task[l], type: "text" },
       { name: N.owner[l], type: "text" },
       { name: N.due[l], type: "date" },
@@ -296,56 +707,16 @@ export const TEMPLATES: Template[] = [
           tr("Надо сделать", "Треба зробити", "To do", "Offen", "Pendiente"),
           tr("В работе", "В роботі", "In progress", "In Arbeit", "En curso"),
           tr("На проверке", "На перевірці", "Review", "Prüfung", "En revisión"),
+          tr("Готово", "Готово", "Done", "Erledigt", "Hecho"),
         )(l),
+        default: tr("Надо сделать", "Треба зробити", "To do", "Offen", "Pendiente")[l],
       },
-      { name: N.done[l], type: "checkbox" },
-    ],
-  },
-  {
-    id: "budget",
-    icon: "≡",
-    uses: ["finance", "personal"],
-    name: tr("Доходы и расходы", "Доходи та витрати", "Income & expenses", "Einnahmen & Ausgaben", "Ingresos y gastos"),
-    description: tr(
-      "Всё движение денег в одном месте",
-      "Увесь рух грошей в одному місці",
-      "All your cash flow in one place",
-      "Alle Geldflüsse an einem Ort",
-      "Todo tu dinero en un solo lugar",
-    ),
-    why: tr(
-      "Итоги по месяцам и категориям строятся сами — без сводных таблиц.",
-      "Підсумки за місяцями й категоріями будуються самі — без зведених таблиць.",
-      "Totals by month and category build themselves — no pivot tables.",
-      "Summen nach Monat und Kategorie entstehen von selbst — keine Pivot-Tabellen.",
-      "Los totales por mes y categoría salen solos, sin tablas dinámicas.",
-    ),
-    when: tr(
-      "Хотите понимать, сколько приходит и куда уходит.",
-      "Хочете розуміти, скільки надходить і куди йде.",
-      "You want to see what comes in and where it goes.",
-      "Sie wollen sehen, was reinkommt und wohin es geht.",
-      "Quieres ver cuánto entra y adónde va.",
-    ),
-    columns: (l) => [
-      { name: N.date[l], type: "date" },
-      {
-        name: N.type[l],
-        type: "select",
-        options: opts(
-          tr("Доход", "Дохід", "Income", "Einnahme", "Ingreso"),
-          tr("Расход", "Витрата", "Expense", "Ausgabe", "Gasto"),
-        )(l),
-      },
-      { name: N.category[l], type: "select", options: expenseCategories(l) },
-      { name: N.amount[l], type: "money" },
-      { name: N.note[l], type: "text" },
-    ],
+    ]),
   },
   {
     id: "expenses",
     icon: "↘",
-    uses: ["personal", "finance"],
+    uses: ["personal"],
     name: tr("Расходы", "Витрати", "Expenses", "Ausgaben", "Gastos"),
     description: tr(
       "Куда уходят деньги, по категориям",
@@ -355,11 +726,11 @@ export const TEMPLATES: Template[] = [
       "En qué se va el dinero, por categoría",
     ),
     why: tr(
-      "Скажите «такси 450» — запись готова. Не нужно открывать таблицу на телефоне.",
-      "Скажіть «таксі 450» — запис готовий. Не треба відкривати таблицю на телефоні.",
-      "Say “taxi 450” and the entry is done. No squinting at a sheet on your phone.",
-      "Sagen Sie „Taxi 450“ — fertig. Kein Gefummel mit einer Tabelle am Handy.",
-      "Di «taxi 450» y listo. Sin pelearte con una hoja en el móvil.",
+      "Напишите «такси 450» — запись готова, категория подставится сама.",
+      "Напишіть «таксі 450» — запис готовий, категорія підставиться сама.",
+      "Type “taxi 12” and the entry is done, category included.",
+      "Tippen Sie „Taxi 12“ — fertig, die Kategorie wird erkannt.",
+      "Escribe «taxi 12» y listo, con la categoría puesta.",
     ),
     when: tr(
       "Деньги куда-то утекают и хочется понять куда.",
@@ -368,44 +739,53 @@ export const TEMPLATES: Template[] = [
       "Das Geld verschwindet und Sie wollen wissen, wohin.",
       "El dinero se esfuma y quieres saber en qué.",
     ),
-    columns: (l) => [
-      { name: N.date[l], type: "date" },
-      { name: N.category[l], type: "select", options: expenseCategories(l) },
-      { name: N.amount[l], type: "money" },
-      { name: N.note[l], type: "text" },
-    ],
+    main: "main",
+    tables: one(
+      "main",
+      tr("Расходы", "Витрати", "Expenses", "Ausgaben", "Gastos"),
+      "↘",
+      (l) => [
+        { name: N.date[l], type: "date" },
+        { name: N.category[l], type: "select", options: PERSONAL_EXPENSES.map((c) => c.name[l]) },
+        { name: N.amount[l], type: "money" },
+        { name: N.note[l], type: "text" },
+      ],
+      (l) => ({ amount: N.amount[l], kind: "expense" }),
+    ),
   },
   {
     id: "savings",
     icon: "◔",
     uses: ["personal"],
-    name: tr("Копилка", "Скарбничка", "Savings", "Sparschwein", "Hucha"),
+    name: tr("Копилка с целью", "Скарбничка з ціллю", "Savings goal", "Sparziel", "Hucha con objetivo"),
     description: tr(
-      "Сколько и когда отложил",
-      "Скільки й коли відклав",
-      "What you saved and when",
-      "Was du wann gespart hast",
-      "Cuánto y cuándo ahorraste",
+      "Сколько отложили и сколько осталось до цели",
+      "Скільки відклали і скільки лишилось до цілі",
+      "What you've put aside and how far to go",
+      "Was Sie zurückgelegt haben und was noch fehlt",
+      "Cuánto has apartado y cuánto te falta",
     ),
     why: tr(
-      "Три колонки и итог сверху. Ничего настраивать не нужно.",
-      "Три колонки й підсумок зверху. Нічого налаштовувати не треба.",
-      "Three columns and the total on top. Nothing to set up.",
-      "Drei Spalten, die Summe oben. Nichts einzurichten.",
-      "Tres columnas y el total arriba. Nada que configurar.",
+      "Цель и полоска прогресса сверху. Zifra скажет, сколько откладывать в месяц, чтобы успеть.",
+      "Ціль і смужка прогресу зверху. Zifra скаже, скільки відкладати щомісяця, щоб встигнути.",
+      "Your goal and a progress bar on top. Zifra tells you how much to save each month to make it.",
+      "Ziel und Fortschrittsbalken oben. Zifra sagt, wie viel Sie monatlich sparen müssen.",
+      "Tu objetivo y una barra de progreso arriba. Zifra te dice cuánto ahorrar al mes para llegar.",
     ),
     when: tr(
-      "Копите на цель и хотите видеть прогресс.",
-      "Накопичуєте на ціль і хочете бачити прогрес.",
-      "You're saving for something and want to see progress.",
-      "Sie sparen auf etwas und wollen den Fortschritt sehen.",
-      "Ahorras para algo y quieres ver cómo avanzas.",
+      "Копите на отпуск, машину или подушку безопасности.",
+      "Накопичуєте на відпустку, авто чи подушку безпеки.",
+      "You're saving for a holiday, a car or a safety cushion.",
+      "Sie sparen auf Urlaub, ein Auto oder einen Notgroschen.",
+      "Ahorras para unas vacaciones, un coche o un colchón.",
     ),
-    columns: (l) => [
+    main: "main",
+    goal: true,
+    tables: one("main", tr("Копилка", "Скарбничка", "Savings", "Sparziel", "Hucha"), "◔", (l) => [
       { name: N.date[l], type: "date" },
       { name: N.amount[l], type: "money" },
       { name: N.note[l], type: "text" },
-    ],
+    ]),
   },
   {
     id: "debts",
@@ -433,7 +813,8 @@ export const TEMPLATES: Template[] = [
       "Sie verleihen oder leihen und wollen es nicht vergessen.",
       "Prestas o pides prestado y no quieres olvidarlo.",
     ),
-    columns: (l) => [
+    main: "main",
+    tables: one("main", tr("Долги", "Борги", "Debts", "Schulden", "Deudas"), "⇄", (l) => [
       { name: N.who[l], type: "text" },
       {
         name: N.direction[l],
@@ -446,11 +827,96 @@ export const TEMPLATES: Template[] = [
       { name: N.amount[l], type: "money" },
       { name: N.due[l], type: "date" },
       { name: N.returned[l], type: "checkbox" },
-    ],
+    ]),
+  },
+  {
+    id: "trips",
+    icon: "↗",
+    uses: ["finance", "services"],
+    name: tr("Поездки на авто", "Поїздки авто", "Mileage log", "Fahrtenbuch", "Kilometraje"),
+    description: tr(
+      "Деловые поездки: километры и сумма к возмещению",
+      "Ділові поїздки: кілометри й сума до відшкодування",
+      "Business trips: kilometres and the amount you can claim",
+      "Dienstfahrten: Kilometer und absetzbarer Betrag",
+      "Viajes de trabajo: kilómetros e importe a deducir",
+    ),
+    why: tr(
+      "Сумма считается сама по ставке 0,30 за км — ставку можно поменять в колонке.",
+      "Сума рахується сама за ставкою 0,30 за км — ставку можна змінити в колонці.",
+      "The amount works itself out at 0.30 per km — change the rate in the column any time.",
+      "Der Betrag rechnet sich mit 0,30 € pro km — den Satz können Sie in der Spalte ändern.",
+      "El importe se calcula a 0,30 por km; puedes cambiar la tarifa en la columna.",
+    ),
+    when: tr(
+      "Ездите к клиентам на своей машине и хотите списать расходы.",
+      "Їздите до клієнтів власним авто й хочете списати витрати.",
+      "You drive your own car to clients and want to claim it.",
+      "Sie fahren mit dem eigenen Auto zu Kunden und wollen es absetzen.",
+      "Vas a ver clientes en tu coche y quieres deducirlo.",
+    ),
+    main: "main",
+    tables: one("main", tr("Поездки", "Поїздки", "Trips", "Fahrtenbuch", "Viajes"), "↗", (l) => [
+      { name: N.date[l], type: "date" },
+      { name: N.route[l], type: "text" },
+      { name: N.purpose[l], type: "text" },
+      { name: N.km[l], type: "number" },
+      { name: N.allowance[l], type: "formula", formula: `[${N.km[l]}] * 0,30`, format: "money" },
+    ]),
   },
 ];
 
 export function templatesFor(use: UseCase): Template[] {
   if (use === "other") return TEMPLATES;
   return TEMPLATES.filter((t) => t.uses.includes(use));
+}
+
+export function findTemplate(id: string): Template | undefined {
+  return TEMPLATES.find((t) => t.id === id);
+}
+
+/** Columns of the table a template opens with — what the onboarding shows. */
+export function templateColumns(tpl: Template, l: Locale): TemplateColumn[] {
+  return (tpl.tables.find((t) => t.key === tpl.main) ?? tpl.tables[0]).columns(l);
+}
+
+/**
+ * Create all tables of a template, wired together: links point at the right
+ * table, "from link" columns and totals over linked rows are resolved.
+ */
+export function instantiateTemplate(tpl: Template, l: Locale, ctx: CommandContext): { op: Op; tables: Table[]; mainId: string } {
+  const built = new Map<string, Table>();
+  const drafts = new Map<string, TemplateColumn[]>();
+  for (const spec of tpl.tables) {
+    const columns = spec.columns(l);
+    drafts.set(spec.key, columns);
+    const res = createTable(
+      { name: spec.name[l], icon: spec.icon, columns, template: tpl.id, ledger: spec.ledger?.(l) },
+      { ...ctx, ws: undefined },
+    );
+    built.set(spec.key, res.table);
+  }
+  for (const spec of tpl.tables) {
+    const table = built.get(spec.key)!;
+    drafts.get(spec.key)!.forEach((d, i) => {
+      const col = table.columns[i];
+      if (d.linkTo) col.linkTableId = built.get(d.linkTo)?.id;
+      if (d.lookupOf) {
+        const via = findColumnByName(table.columns, d.lookupOf.via);
+        const linkTo = drafts.get(spec.key)!.find((c) => c.name === d.lookupOf!.via)?.linkTo;
+        const target = linkTo ? built.get(linkTo) : undefined;
+        const targetCol = target && findColumnByName(target.columns, d.lookupOf.column);
+        if (via && targetCol) col.lookup = { viaColumnId: via.id, columnId: targetCol.id };
+      }
+      if (d.rollupOf) {
+        const source = built.get(d.rollupOf.table);
+        const via = source && findColumnByName(source.columns, d.rollupOf.via);
+        const valueCol = source && d.rollupOf.column ? findColumnByName(source.columns, d.rollupOf.column) : undefined;
+        if (source && via) col.rollup = { tableId: source.id, linkColumnId: via.id, columnId: valueCol?.id ?? null, agg: d.rollupOf.agg };
+      }
+    });
+  }
+  const tables = tpl.tables.map((s) => built.get(s.key)!);
+  const ops: Op[] = tables.map((table) => ({ type: "table.create", table }));
+  return { op: ops.length === 1 ? ops[0] : { type: "batch", ops }, tables, mainId: built.get(tpl.main)!.id };
 }

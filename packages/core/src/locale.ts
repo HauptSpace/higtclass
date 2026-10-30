@@ -49,7 +49,7 @@ export const LOCALE_RULES: Record<Locale, LocaleRules> = {
     multipliers: { k: 1e3, thousand: 1e3, m: 1e6, mln: 1e6, million: 1e6, bn: 1e9, b: 1e9 },
     trueWords: ["y", "done", ...COMMON_TRUE],
     falseWords: ["n", ...COMMON_FALSE],
-    defaultCurrency: "USD",
+    defaultCurrency: "EUR",
   },
   de: {
     tag: "de-DE",
@@ -73,10 +73,52 @@ export const LOCALE_RULES: Record<Locale, LocaleRules> = {
   },
 };
 
-export const CURRENCIES = ["RUB", "UAH", "USD", "EUR", "GBP", "PLN", "KZT", "BYN", "CHF", "TRY"];
+export const CURRENCIES = ["EUR", "USD", "UAH", "GBP", "PLN", "CHF", "CZK", "TRY", "KZT", "BYN", "RUB"];
+
+/** Currencies with the one in use first, then those that fit the language, then the rest. */
+export function currencyChoices(locale: Locale, current?: string): string[] {
+  const first: Record<Locale, string[]> = {
+    uk: ["UAH", "EUR", "USD", "PLN"],
+    ru: ["EUR", "USD", "UAH"],
+    en: ["EUR", "USD", "GBP"],
+    de: ["EUR", "CHF", "USD"],
+    es: ["EUR", "USD"],
+  };
+  return [...new Set([...(current ? [current] : []), ...first[locale], ...CURRENCIES])];
+}
+
+// The browser's region refines formatting inside a language: en-GB writes
+// 30/10/2026 and en-US 10/30/2026, de-AT and de-DE agree. Set once at startup.
+let region: string | null = null;
+
+export function setRegion(tag: string | null | undefined): void {
+  region = tag && /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(tag) ? tag : null;
+}
 
 export function localeTag(locale: Locale): string {
-  return LOCALE_RULES[locale].tag;
+  if (region && region.split("-")[0].toLowerCase() === locale && region.includes("-")) return region;
+  // English outside the US: day before month.
+  return locale === "en" ? "en-GB" : LOCALE_RULES[locale].tag;
+}
+
+/** Day/month order for numeric dates in the current language and region. */
+export function dateOrder(locale: Locale): "DMY" | "MDY" {
+  if (locale !== "en") return LOCALE_RULES[locale].dateOrder;
+  return /^en-(US|PH|CA)$/i.test(localeTag(locale)) ? "MDY" : "DMY";
+}
+
+const REGION_CURRENCY: Record<string, string> = {
+  UA: "UAH", US: "USD", GB: "GBP", PL: "PLN", CH: "CHF", CZ: "CZK", TR: "TRY", KZ: "KZT", BY: "BYN", RU: "RUB",
+  CA: "USD", AU: "USD",
+};
+const EURO = ["DE", "AT", "ES", "FR", "IT", "NL", "BE", "IE", "PT", "FI", "GR", "SK", "SI", "LT", "LV", "EE", "LU", "MT", "CY", "HR"];
+
+/** A sensible default currency for a browser language like "en-GB" or "es-MX". */
+export function currencyForLanguage(tag: string, locale: Locale): string {
+  const country = tag.split("-")[1]?.toUpperCase();
+  if (country && EURO.includes(country)) return "EUR";
+  if (country && REGION_CURRENCY[country]) return REGION_CURRENCY[country];
+  return LOCALE_RULES[locale].defaultCurrency;
 }
 
 /** Best-effort match of a browser language like "uk-UA" to a supported locale. */

@@ -53,7 +53,7 @@ const columnSchema = {
     name: { type: "string" },
     type: {
       type: "string",
-      enum: COLUMN_TYPES.filter((t) => t !== "lookup"),
+      enum: COLUMN_TYPES.filter((t) => t !== "lookup" && t !== "rollup"),
       description: "money for amounts, date for dates, select for a fixed set of choices, checkbox for yes/no, formula for values computed from other columns, link to point at rows of another table",
     },
     options: { type: "array", items: { type: "string" }, description: "Choices for select columns" },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createTable } from "./commands.ts";
-import { parseCsv, planImport, toCsv } from "./infer.ts";
+import { decodeText, inferColumn, parseCsv, planImport, toCsv } from "./infer.ts";
 
 describe("import", () => {
   it("guesses column types from an Excel-like grid", () => {
@@ -48,5 +48,40 @@ describe("import", () => {
       ["Имя", "Сумма"],
       ['ООО "Альфа"', "120000"],
     ]);
+  });
+});
+
+describe("messy files", () => {
+  it("finds the header below bank account lines and skips the total row", () => {
+    const grid = parseCsv(
+      [
+        "Kontonummer:;DE12 3456 7890",
+        "Zeitraum:;01.10.2026 - 30.10.2026",
+        "",
+        "Buchungstag;Verwendungszweck;Betrag",
+        "01.10.26;REWE Markt;-45,90",
+        '02.10.26;"Montage; Küche";1.250,50',
+        "03.10.26;Baumarkt;-120,00",
+        "Summe;;1.084,60",
+      ].join("\n"),
+    );
+    const plan = planImport(grid, "de");
+    expect(plan.headerRow).toBe(2);
+    expect(plan.skippedTotals).toBe(1);
+    expect(plan.columns.map((c) => [c.name, c.type])).toEqual([
+      ["Buchungstag", "date"],
+      ["Verwendungszweck", "text"],
+      ["Betrag", "money"],
+    ]);
+    expect(plan.rows).toHaveLength(3);
+  });
+
+  it("reads Windows-1252 files with umlauts", () => {
+    const bytes = new Uint8Array([0x4d, 0xf6, 0x62, 0x65, 0x6c, 0x3b, 0x45, 0x6d, 0x70, 0x66, 0xe4, 0x6e, 0x67, 0x65, 0x72]);
+    expect(decodeText(bytes)).toBe("Möbel;Empfänger");
+  });
+
+  it("takes the currency from the header", () => {
+    expect(inferColumn("Закупка (руб)", ["1 200", "1200,5", "1.200"], "ru")).toMatchObject({ type: "money", currency: "RUB" });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyOp } from "./ops.ts";
 import { createTable } from "./commands.ts";
-import { DEFAULT_RULES, germanHolidays, incomeThisYear, isRulePack, suggestionsFor, upcomingDeadlines, upcomingHolidays } from "./knowledge.ts";
+import { deadlinePeriod, DEFAULT_RULES, germanHolidays, incomeThisYear, isRulePack, suggestionsFor, upcomingDeadlines, upcomingHolidays } from "./knowledge.ts";
 
 describe("for-you rules", () => {
   it("picks deadlines for a Ukrainian FOP of group 3", () => {
@@ -20,9 +20,10 @@ describe("for-you rules", () => {
 
   it("filters suggestions by profile", () => {
     const ids = suggestionsFor(DEFAULT_RULES, { country: "DE", occupation: "self", regime: "de_klein" }).map((s) => s.id);
-    expect(ids).toEqual(["de_klein_limit", "de_euer"]);
+    expect(ids).toEqual(["de_klein_limit", "de_euer", "de_trips", "goals"]);
     expect(suggestionsFor(DEFAULT_RULES, { country: "other", occupation: "personal", regime: "none" }).map((s) => s.id)).toEqual([
       "personal_savings",
+      "goals",
       "personal_expenses",
     ]);
   });
@@ -56,6 +57,19 @@ describe("for-you rules", () => {
     );
     const ws = applyOp({ tables: [] }, res.op);
     expect(incomeThisYear(ws, "2026-10-29")).toEqual({ total: 1000, tables: ["Доходы и расходы"] });
+  });
+
+  it("adds state holidays when the Bundesland is known", () => {
+    expect(germanHolidays(2026, "NW").some((h) => h.name === "Allerheiligen")).toBe(true);
+    expect(germanHolidays(2026, "BE").some((h) => h.name === "Allerheiligen")).toBe(false);
+    expect(germanHolidays(2026, "SN").find((h) => h.name === "Buß- und Bettag")!.date).toBe("2026-11-18");
+  });
+
+  it("keeps a passed deadline visible for a week and knows its quarter", () => {
+    const up = upcomingDeadlines(DEFAULT_RULES, { country: "UA", occupation: "self", regime: "ua_fop3" }, "2026-11-12", 10, 7);
+    const decl = up.find((u) => u.deadline.id === "ua_fop3_declaration")!;
+    expect(decl.daysLeft).toBe(-3);
+    expect(deadlinePeriod(decl.deadline, decl.date)).toEqual({ from: "2026-07-01", to: "2026-09-30" });
   });
 
   it("validates fetched rule packs", () => {

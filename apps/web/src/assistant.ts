@@ -50,7 +50,8 @@ export async function askAssistant(input: {
     .json()
     .then((b: { error?: string }) => b.error)
     .catch(() => undefined);
-  if (res.status === 503 || error === "assistant_not_configured") return { ok: false, failure: "off" };
+  // 502/504/404: no API behind the site at all (the proxy has nothing to talk to).
+  if (res.status === 503 || error === "assistant_not_configured" || res.status === 502 || res.status === 504 || res.status === 404) return { ok: false, failure: "off" };
   if (res.status === 429) return { ok: false, failure: "busy" };
   if (error === "refused") return { ok: false, failure: "refused" };
   return { ok: false, failure: "error" };

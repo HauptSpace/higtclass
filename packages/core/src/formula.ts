@@ -92,6 +92,9 @@ const FUNCTIONS: Record<string, string[]> = {
   IF: ["ЕСЛИ", "ЯКЩО", "WENN", "SI"],
   TODAY: ["СЕГОДНЯ", "СЬОГОДНІ", "HEUTE", "HOY"],
   DAYS: ["ДНИ", "ДНІ", "TAGE", "DIAS", "DÍAS"],
+  SUM: ["СУММ", "СУММА", "СУМ", "СУМА", "SUMME", "SUMA"],
+  AVERAGE: ["СРЗНАЧ", "СЕРЗНАЧ", "СРЕДНЕЕ", "СЕРЕДНЄ", "MITTELWERT", "PROMEDIO", "AVG"],
+  COUNT: ["СЧЁТ", "СЧЕТ", "РАХУНОК", "КІЛЬКІСТЬ", "КОЛИЧЕСТВО", "ANZAHL", "CONTAR"],
 };
 for (const [name, aliases] of Object.entries(FUNCTIONS)) {
   FUNCTION_ALIASES[name] = name;
@@ -266,6 +269,13 @@ export function findColumnByName(columns: Column[], name: string): Column | unde
  * is shown as money in that column's currency.
  */
 export function displayColumn(table: Table, column: Column, ws?: Workspace, depth = 0): Column {
+  if (column.type === "rollup") {
+    const source = ws?.tables.find((t) => t.id === column.rollup?.tableId);
+    const target = source?.columns.find((c) => c.id === column.rollup?.columnId);
+    if (!source || !target || column.rollup?.agg === "count" || depth >= MAX_LOOKUP_DEPTH) return column;
+    const shown = displayColumn(source, target, ws, depth + 1);
+    return shown.type === "money" ? { ...shown, id: column.id, name: column.name } : column;
+  }
   if (column.type === "lookup") {
     // Shown like the column it looks up, under its own name.
     const via = table.columns.find((c) => c.id === column.lookup?.viaColumnId);
@@ -276,10 +286,16 @@ export function displayColumn(table: Table, column: Column, ws?: Workspace, dept
     return { ...shown, id: column.id, name: column.name };
   }
   if (column.type !== "formula" || !column.formula) return column;
-  const money = formulaRefs(column.formula)
-    .map((name) => findColumnByName(table.columns, name))
-    .find((c) => c?.type === "money");
-  return money ? { ...column, type: "money", currency: money.currency } : column;
+  if (column.format === "money") return { ...column, type: "money" };
+  if (column.format === "number") return column;
+  // A formula over money (also money pulled in from a link, or another money formula) is money.
+  for (const name of formulaRefs(column.formula)) {
+    const ref = findColumnByName(table.columns, name);
+    if (!ref || ref.id === column.id) continue;
+    const shown = ref.type === "money" ? ref : depth < MAX_LOOKUP_DEPTH && ref.type !== "text" ? displayColumn(table, ref, ws, depth + 1) : null;
+    if (shown?.type === "money") return { ...column, type: "money", currency: shown.currency };
+  }
+  return column;
 }
 
 function toNumber(v: Value): number {
@@ -322,7 +338,17 @@ function compare(op: string, a: Value, b: Value): boolean {
 
 interface EvalContext {
   resolve(name: string): Value;
+  /** Every value of a column, for SUM([Amount]) over the whole table. */
+  column(name: string): Value[];
   today: string;
+}
+
+function numbersOf(args: Node[], ctx: EvalContext): number[] {
+  // SUM([Amount]) with a bare column means the whole column; anything else is a list of values.
+  if (args.length === 1 && args[0].k === "ref") {
+    return ctx.column(args[0].name).filter((v): v is number => typeof v === "number");
+  }
+  return args.map((a) => toNumber(evaluate(a, ctx)));
 }
 
 function evaluate(n: Node, ctx: EvalContext): Value {
@@ -392,6 +418,20 @@ function evaluate(n: Node, ctx: EvalContext): Value {
         case "DAYS":
           need(2);
           return dayNumber(evaluate(args[0], ctx)) - dayNumber(evaluate(args[1], ctx));
+        case "SUM": {
+          if (!args.length) throw new FormulaError("syntax", "SUM: no arguments");
+          return numbersOf(args, ctx).reduce((a, b) => a + b, 0);
+        }
+        case "AVERAGE": {
+          if (!args.length) throw new FormulaError("syntax", "AVERAGE: no arguments");
+          const nums = numbersOf(args, ctx);
+          return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+        }
+        case "COUNT": {
+          need(1);
+          if (args[0].k !== "ref") throw new FormulaError("syntax", "COUNT: expects a column");
+          return ctx.column(args[0].name).filter((v) => v !== null && v !== "").length;
+        }
       }
       throw new FormulaError("syntax", `Unknown function ${n.fn}`);
     }
@@ -410,6 +450,40 @@ export function resolveLink(ws: Workspace | undefined, column: Column, value: Ce
 
 const MAX_LOOKUP_DEPTH = 4;
 
+// Rows of a table grouped by the row they link to, rebuilt whenever that table changes.
+const linkIndex = new WeakMap<Row[], Map<string, Map<string, Row[]>>>();
+
+export function linkedRowsIndex(source: Table, linkColumnId: string): Map<string, Row[]> {
+  let byColumn = linkIndex.get(source.rows);
+  if (!byColumn) {
+    byColumn = new Map();
+    linkIndex.set(source.rows, byColumn);
+  }
+  let index = byColumn.get(linkColumnId);
+  if (!index) {
+    index = new Map();
+    for (const r of source.rows) {
+      const target = r.values[linkColumnId];
+      if (typeof target !== "string") continue;
+      const list = index.get(target);
+      if (list) list.push(r);
+      else index.set(target, [r]);
+    }
+    byColumn.set(linkColumnId, index);
+  }
+  return index;
+}
+
+// Whole-column values for SUM([X]) — computed once per workspace version.
+const columnCache = new WeakMap<object, Map<string, Value[] | "busy">>();
+
+export function aggregateValues(nums: number[], agg: "sum" | "avg" | "min" | "max"): number | null {
+  if (!nums.length) return agg === "sum" ? 0 : null;
+  if (agg === "sum") return nums.reduce((a, b) => a + b, 0);
+  if (agg === "avg") return nums.reduce((a, b) => a + b, 0) / nums.length;
+  return agg === "min" ? Math.min(...nums) : Math.max(...nums);
+}
+
 /**
  * Computes every formula and lookup column of one row. Formulas may reference
  * other computed columns; cycles are reported as errors instead of hanging.
@@ -427,9 +501,61 @@ export function computeRow(table: Table, row: Row, today: string, ws?: Workspace
     if (!target || !targetCol) return { error: "ref" };
     const linked = target.rows.find((r) => r.id === row.values[via.id]);
     if (!linked) return { value: null };
-    if (targetCol.type !== "formula" && targetCol.type !== "lookup") return { value: linked.values[targetCol.id] ?? null };
+    if (targetCol.type !== "formula" && targetCol.type !== "lookup" && targetCol.type !== "rollup") return { value: linked.values[targetCol.id] ?? null };
     if (depth >= MAX_LOOKUP_DEPTH) return { error: "cycle" };
     return computeRow(target, linked, today, ws, depth + 1)[targetCol.id] ?? { value: null };
+  };
+
+  const rollupValue = (col: Column): ComputedCell => {
+    const spec = col.rollup;
+    const source = ws?.tables.find((t) => t.id === spec?.tableId);
+    if (!spec || !source || !source.columns.some((c) => c.id === spec.linkColumnId)) return { error: "ref" };
+    const linked = linkedRowsIndex(source, spec.linkColumnId).get(row.id) ?? [];
+    if (spec.agg === "count") return { value: linked.length };
+    const valueCol = source.columns.find((c) => c.id === spec.columnId);
+    if (!valueCol) return { error: "ref" };
+    const nums: number[] = [];
+    for (const r of linked) {
+      let v: CellValue | undefined;
+      if (valueCol.type === "formula" || valueCol.type === "lookup" || valueCol.type === "rollup") {
+        if (depth >= MAX_LOOKUP_DEPTH) return { error: "cycle" };
+        const c = computeRow(source, r, today, ws, depth + 1)[valueCol.id];
+        if (c && "error" in c) return c;
+        v = c?.value;
+      } else v = r.values[valueCol.id];
+      if (typeof v === "number") nums.push(v);
+    }
+    return { value: aggregateValues(nums, spec.agg) };
+  };
+
+  const wholeColumn = (name: string): Value[] => {
+    const ref = findColumnByName(table.columns, name);
+    if (!ref) throw new FormulaError("ref", `No column "${name}"`);
+    if (ref.type !== "formula" && ref.type !== "lookup" && ref.type !== "rollup") {
+      return table.rows.map((r) => (r.values[ref.id] ?? null) as Value);
+    }
+    const key = ws ?? table;
+    let cache = columnCache.get(key);
+    if (!cache) {
+      cache = new Map();
+      columnCache.set(key, cache);
+    }
+    const cacheKey = `${table.id}:${ref.id}`;
+    const hit = cache.get(cacheKey);
+    if (hit === "busy" || visiting.has(ref.id) || depth >= MAX_LOOKUP_DEPTH) throw new FormulaError("cycle", "Column refers to itself");
+    if (hit) return hit;
+    cache.set(cacheKey, "busy");
+    try {
+      const values = table.rows.map((r) => {
+        const c = computeRow(table, r, today, ws, depth + 1)[ref.id];
+        return c && "value" in c ? (c.value as Value) : null;
+      });
+      cache.set(cacheKey, values);
+      return values;
+    } catch (e) {
+      cache.delete(cacheKey);
+      throw e;
+    }
   };
 
   const computeColumn = (col: Column): ComputedCell => {
@@ -440,15 +566,18 @@ export function computeRow(table: Table, row: Row, today: string, ws?: Workspace
     let result: ComputedCell;
     if (col.type === "lookup") {
       result = lookupValue(col);
+    } else if (col.type === "rollup") {
+      result = rollupValue(col);
     } else {
       try {
         const ast = compile(col.formula ?? "");
         const value = evaluate(ast, {
           today,
+          column: wholeColumn,
           resolve(name) {
             const ref = findColumnByName(table.columns, name);
             if (!ref) throw new FormulaError("ref", `No column "${name}"`);
-            if (ref.type !== "formula" && ref.type !== "lookup") return row.values[ref.id] ?? null;
+            if (ref.type !== "formula" && ref.type !== "lookup" && ref.type !== "rollup") return row.values[ref.id] ?? null;
             const inner = computeColumn(ref);
             if ("error" in inner) throw new FormulaError(inner.error, "Upstream error");
             return inner.value;
@@ -464,7 +593,7 @@ export function computeRow(table: Table, row: Row, today: string, ws?: Workspace
     return result;
   };
 
-  for (const col of table.columns) if (col.type === "formula" || col.type === "lookup") computeColumn(col);
+  for (const col of table.columns) if (col.type === "formula" || col.type === "lookup" || col.type === "rollup") computeColumn(col);
   return out;
 }
 

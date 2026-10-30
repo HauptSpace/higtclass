@@ -1,3 +1,4 @@
+import { setRegion } from "@higtclass/core";
 import { useEffect, useState } from "react";
 import { ForYouView, useRulesSync } from "./components/ForYou.tsx";
 import { ImportDialog } from "./components/ImportDialog.tsx";
@@ -8,6 +9,7 @@ import { Sidebar, Wordmark } from "./components/Sidebar.tsx";
 import { TableView } from "./components/TableView.tsx";
 import { Toast } from "./components/Toast.tsx";
 import { useT } from "./i18n/index.ts";
+import { isTyping } from "./lib.ts";
 import { useActiveTable, useStore, type AppSettings } from "./store.ts";
 
 /** Black or white text on top of a given accent colour. */
@@ -56,6 +58,9 @@ export function App() {
   const [newReport, setNewReport] = useState(false);
   const report = useStore((s) => s.ws.reports?.find((r) => r.id === s.activeReportId) ?? null);
   const page = useStore((s) => s.page);
+  const hydrated = useStore((s) => s.hydrated);
+  // Formats follow the browser's region (en-GB → 30/10/2026); set before rendering anything.
+  setRegion(settings.region);
   useRulesSync();
   const sidebarProps = {
     onNewTable: () => {
@@ -77,7 +82,7 @@ export function App() {
   // Ctrl/Cmd+Z everywhere except while typing (the field's own undo wins there).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+      if (isTyping(e.target)) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();
@@ -91,6 +96,9 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
+
+  // Nothing until saved data is read: no flash of the welcome screen for returning people.
+  if (!hydrated) return <div className="h-dvh bg-paper" aria-busy="true" />;
 
   return (
     <div className="flex h-dvh">

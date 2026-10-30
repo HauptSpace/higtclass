@@ -16,7 +16,8 @@ export function Toast() {
 
   if (!toast) return null;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[60] flex justify-center px-4 md:bottom-8" role="status">
+    // Top of the screen: at the bottom it covered the "Save and add another" button.
+    <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-[60] flex justify-center px-4" role="status">
       <div key={toast.id} className="pointer-events-auto flex max-w-md items-center gap-5 rounded-xl bg-ink px-5 py-3.5 font-semibold text-paper shadow-2xl">
         <span>{toast.text}</span>
         {toast.undoable && (

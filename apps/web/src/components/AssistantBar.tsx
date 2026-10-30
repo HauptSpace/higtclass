@@ -1,7 +1,8 @@
-import type { Op } from "@higtclass/core";
+import { addRecords, parseQuickEntries, type Op } from "@higtclass/core";
 import { useRef, useState } from "react";
 import { askAssistant, describeOps, readPhoto, type AssistantFailure, type PhotoInput } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
+import { useStockWarnings } from "../lib.ts";
 import { useDictation } from "../speech.ts";
 import { useStore } from "../store.ts";
 import { Button } from "./ui.tsx";
@@ -12,7 +13,7 @@ import { Button } from "./ui.tsx";
 type Phase =
   | { kind: "idle" }
   | { kind: "thinking" }
-  | { kind: "preview"; reply: string; ops: Op[] }
+  | { kind: "preview"; reply: string; ops: Op[]; local?: boolean; note?: AssistantFailure }
   | { kind: "failed"; failure: AssistantFailure }
   | { kind: "reply"; reply: string };
 
@@ -66,6 +67,7 @@ export function AssistantBar({ tableId }: { tableId: string }) {
   const settings = useStore((s) => s.settings);
   const dispatch = useStore((s) => s.dispatch);
   const showToast = useStore((s) => s.showToast);
+  const warnStock = useStockWarnings();
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<PhotoInput | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -75,9 +77,23 @@ export function AssistantBar({ tableId }: { tableId: string }) {
     if (final && spoken) void submit(spoken);
   });
 
+  // Short entries ("кава 85", "вчора таксі 240") are understood right here:
+  // instant, free and offline. The assistant gets the rest.
+  const quick = (msg: string): Op[] | null => {
+    const table = ws.tables.find((tb) => tb.id === tableId);
+    if (!table || !msg) return null;
+    const ctx = { locale: settings.locale, ws };
+    const entries = parseQuickEntries(table, msg, ctx);
+    if (!entries) return null;
+    const res = addRecords(table, entries.map((e) => e.record), ctx);
+    return res.problems.length ? null : [res.op];
+  };
+
   async function submit(message = text) {
     const msg = message.trim();
     if (!msg && !photo) return;
+    const local = photo ? null : quick(msg);
+    if (local) return setPhase({ kind: "preview", reply: "", ops: local, local: true });
     setPhase({ kind: "thinking" });
     const res = await askAssistant({ message: msg, image: photo, activeTableId: tableId, workspace: ws, settings });
     if (!res.ok) return setPhase({ kind: "failed", failure: res.failure });
@@ -93,8 +109,16 @@ export function AssistantBar({ tableId }: { tableId: string }) {
 
   const save = () => {
     if (phase.kind !== "preview") return;
+    const before = useStore.getState().ws;
     if (dispatch({ type: "batch", ops: phase.ops }, t("ai.saved"))) {
       showToast(t("ai.saved"));
+      const inserted: string[] = [];
+      const visit = (op: Op) => {
+        if (op.type === "batch") op.ops.forEach(visit);
+        else if (op.type === "rows.insert" && op.tableId === tableId) inserted.push(...op.rows.map((r) => r.id));
+      };
+      phase.ops.forEach(visit);
+      warnStock(before, tableId, inserted);
       reset();
     } else {
       // The table changed while Zifra was thinking: ask again on fresh data.
@@ -174,6 +198,7 @@ export function AssistantBar({ tableId }: { tableId: string }) {
       {phase.kind === "preview" && (
         <div className="px-4 pb-4 md:pl-[7.5rem]">
           {phase.reply && <p className="mb-3 text-ink-2">{phase.reply}</p>}
+          {phase.local && <p className="mb-2 text-xs font-bold tracking-wide text-ink-2 uppercase">{t("ai.local")}</p>}
           <ChangeList ops={phase.ops} />
           <div className="mt-4 flex gap-2">
             <Button variant="primary" onClick={save}>

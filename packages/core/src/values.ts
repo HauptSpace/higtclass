@@ -1,4 +1,4 @@
-import { LOCALE_RULES, localeTag } from "./locale.ts";
+import { dateOrder, LOCALE_RULES, localeTag } from "./locale.ts";
 import type { CellValue, Column, Locale, Settings } from "./types.ts";
 
 // Turning loose human input ("1 500,50", "5к", "вчера", "так") into typed
@@ -7,7 +7,12 @@ import type { CellValue, Column, Locale, Settings } from "./types.ts";
 const CURRENCY_NOISE =
   /[₽₴$€£¥₸]|(?<!\p{L})(руб\p{L}*|р|грн|гривен\p{L}*|uah|rub|usd|eur|euros?|евро|доллар\p{L}*|dollars?|zł|pln)(?!\p{L})\.?/giu;
 
-export function parseNumber(raw: unknown, locale: Locale): number | null {
+/**
+ * `money`: amounts never have three decimals, so "1.500" or "1,500" with a
+ * single separator before exactly three digits is read as one thousand five
+ * hundred in every language instead of 1.5.
+ */
+export function parseNumber(raw: unknown, locale: Locale, opts: { money?: boolean } = {}): number | null {
   if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
   if (typeof raw !== "string") return null;
   const rules = LOCALE_RULES[locale];
@@ -25,14 +30,14 @@ export function parseNumber(raw: unknown, locale: Locale): number | null {
   }
   if (!/^[-+]?[\d.,]*\d[\d.,]*$/.test(s)) return null;
 
-  const normalized = normalizeSeparators(s, rules.decimal);
+  const normalized = normalizeSeparators(s, rules.decimal, opts.money ?? false);
   if (normalized === null) return null;
   const n = Number(normalized) * mult;
   return Number.isFinite(n) ? n : null;
 }
 
 /** Resolve which of `,` / `.` is the decimal mark and return a JS number string. */
-function normalizeSeparators(s: string, decimal: "," | "."): string | null {
+function normalizeSeparators(s: string, decimal: "," | ".", money: boolean): string | null {
   const commas = (s.match(/,/g) ?? []).length;
   const dots = (s.match(/\./g) ?? []).length;
   if (commas && dots) {
@@ -52,7 +57,7 @@ function normalizeSeparators(s: string, decimal: "," | "."): string | null {
   if (commas + dots > 1) return looksGrouped ? sign + groups.join("") : null;
   // A single separator: the locale's decimal mark is a decimal; the other one
   // is a thousands separator only when followed by exactly three digits.
-  if (sep === decimal || !looksGrouped) return sign + groups.join(".");
+  if (!looksGrouped || (sep === decimal && !(money && groups[0] !== "0"))) return sign + groups.join(".");
   return sign + groups.join("");
 }
 
@@ -86,7 +91,7 @@ export function parseDate(raw: unknown, locale: Locale, now = new Date()): strin
   m = s.match(/^(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2}|\d{4}))?\.?$/);
   if (m) {
     const [a, b] = [+m[1], +m[2]];
-    const [day, month] = rules.dateOrder === "DMY" ? [a, b] : [b, a];
+    const [day, month] = dateOrder(locale) === "DMY" ? [a, b] : [b, a];
     const year = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : now.getFullYear();
     return validDate(year, month, day);
   }
@@ -118,7 +123,7 @@ export function parseValue(
   switch (column.type) {
     case "number":
     case "money":
-      v = parseNumber(raw, locale);
+      v = parseNumber(raw, locale, { money: column.type === "money" });
       break;
     case "date":
       v = parseDate(raw, locale, now);
@@ -128,6 +133,7 @@ export function parseValue(
       break;
     case "formula":
     case "lookup":
+    case "rollup":
       return undefined;
     case "text":
     case "select":
@@ -141,7 +147,7 @@ export function parseValue(
 /** Re-interpret an already stored value after a column changes type. */
 export function convertValue(value: CellValue, to: Column, locale: Locale): CellValue {
   if (value === null) return null;
-  if (to.type === "formula" || to.type === "lookup") return null;
+  if (to.type === "formula" || to.type === "lookup" || to.type === "rollup") return null;
   if (typeof value === "boolean" && (to.type === "text" || to.type === "select")) {
     return value ? LOCALE_RULES[locale].trueWords[0] : LOCALE_RULES[locale].falseWords[0];
   }
@@ -163,7 +169,7 @@ function cached<T extends Intl.NumberFormat | Intl.DateTimeFormat>(key: string, 
   return f as T;
 }
 
-export function formatNumber(n: number, locale: Locale, currency?: string): string {
+export function formatNumber(n: number, locale: Locale, currency?: string, digits = 4): string {
   const tag = localeTag(locale);
   if (currency) {
     // Whole amounts read better without ",00".
@@ -177,7 +183,7 @@ export function formatNumber(n: number, locale: Locale, currency?: string): stri
       }),
     ).format(n);
   }
-  return cached(`n:${tag}`, () => new Intl.NumberFormat(tag, { maximumFractionDigits: 4 })).format(n);
+  return cached(`n:${tag}:${digits}`, () => new Intl.NumberFormat(tag, { maximumFractionDigits: digits })).format(n);
 }
 
 export function formatDate(isoDate: string, locale: Locale): string {
@@ -197,8 +203,11 @@ export function formatValue(column: Column, value: CellValue, settings: Settings
         ? formatNumber(value, settings.locale, column.currency ?? settings.currency)
         : String(value);
     case "number":
-    case "formula":
       return typeof value === "number" ? formatNumber(value, settings.locale) : String(value);
+    case "formula":
+    case "rollup":
+      // Calculated numbers: two decimals are plenty (1 816,67, not 1 816,6667).
+      return typeof value === "number" ? formatNumber(value, settings.locale, undefined, 2) : String(value);
     case "date":
       return typeof value === "string" ? formatDate(value, settings.locale) : String(value);
     case "checkbox":
@@ -217,4 +226,14 @@ export function editableValue(column: Column, value: CellValue, locale: Locale):
   }
   if (typeof value === "boolean") return value ? "1" : "";
   return String(value);
+}
+
+/** Numeric date for files: 30.10.2026 / 30/10/2026 / 10/30/2026, so Excel reads it as a date. */
+export function formatDateNumeric(isoDate: string, locale: Locale): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return isoDate;
+  const tag = localeTag(locale);
+  return cached(`dn:${tag}`, () => new Intl.DateTimeFormat(tag, { day: "2-digit", month: "2-digit", year: "numeric" })).format(
+    new Date(y, m - 1, d),
+  );
 }

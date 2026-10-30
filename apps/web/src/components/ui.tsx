@@ -1,4 +1,5 @@
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import type { Column } from "@higtclass/core";
+import { useEffect, type ButtonHTMLAttributes, type ReactNode, type RefObject } from "react";
 
 type Variant = "primary" | "outline" | "ghost" | "danger";
 
@@ -94,9 +95,66 @@ export const inputClass =
 /** Status colour for a select value, used for squares in the grid and cards. */
 export function statusColor(value: string): string | null {
   const v = value.toLowerCase();
+  if (/(просроч|overdue|late|überfällig|vencid|отмен|скасов|cancel|storn|ушёл|пішов|lost|verloren|perdid|проблем|problem|fehler|issue|ошибк|помилк)/.test(v)) return "var(--late)";
   if (/(оплач|paid|bezahlt|pagad|готов|done|fertig|listo|hecho|erledigt|верну|повер|settled|beglichen|devuel|постоян|regular|stamm|habitual)/.test(v)) return "var(--paid)";
-  if (/(ждёт|ждет|чека|wait|offen|pendient|надо|треба|to do|review|провер|перевір|prüf|revisi)/.test(v)) return "var(--wait)";
-  if (/(просроч|overdue|late|überfällig|vencid|отмен|скасов|cancel|storn|ушёл|пішов|lost|verloren|perdid)/.test(v)) return "var(--late)";
+  if (/(ждёт|ждет|чека|wait|offen|pendient|надо|треба|to do|review|провер|перевір|prüf|revisi|заплан|planned|geplant|planific|нов|new|neu|nuevo)/.test(v)) return "var(--wait)";
   if (/(работ|робот|progress|arbeit|curso)/.test(v)) return "var(--work)";
   return null;
+}
+
+/** The colour of a choice: the one the person picked, else the status guess. */
+export function optionColor(column: Pick<Column, "optionColors"> | undefined, value: string): string | null {
+  const picked = column?.optionColors?.[value];
+  return picked ?? statusColor(value);
+}
+
+export const OPTION_COLORS = ["var(--paid)", "var(--work)", "var(--wait)", "var(--late)", "#6D4AFF", "#E2457A", "#7A4B2A", "var(--ink-2)"];
+
+/** Close a popover on Escape or a click outside it. */
+export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void) {
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [ref, open, onClose]);
+}
+
+/** Small round option buttons ("chips"). */
+export function Chips<T extends string>({
+  value,
+  options,
+  label,
+  onPick,
+  multi,
+}: {
+  value: T | T[] | null;
+  options: T[];
+  label: (o: T) => ReactNode;
+  onPick: (o: T) => void;
+  multi?: boolean;
+}) {
+  const on = (o: T) => (multi ? (value as T[] | null)?.includes(o) : value === o);
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => (
+        <button
+          key={o}
+          type="button"
+          aria-pressed={!!on(o)}
+          onClick={() => onPick(o)}
+          className={`rounded-full border-2 px-3.5 py-1.5 text-sm font-semibold transition ${on(o) ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"}`}
+        >
+          {label(o)}
+        </button>
+      ))}
+    </div>
+  );
 }

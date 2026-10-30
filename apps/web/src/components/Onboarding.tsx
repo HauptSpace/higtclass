@@ -1,4 +1,4 @@
-import { createTable, templatesFor, USE_CASES, type Op, type Template, type UseCase } from "@higtclass/core";
+import { createTable, instantiateTemplate, templateColumns, templatesFor, USE_CASES, type Op, type Template, type UseCase } from "@higtclass/core";
 import { useState } from "react";
 import { askAssistant, type AssistantFailure } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
@@ -63,12 +63,11 @@ export function Onboarding({ onDone, compact }: { onDone?: () => void; compact?:
   };
 
   const pickTemplate = (tpl: Template | null) => {
-    const res = createTable(
-      tpl
-        ? { name: tpl.name[locale], icon: tpl.icon, columns: tpl.columns(locale) }
-        : { name: t("newTable.untitled"), icon: "□", columns: [{ name: t("type.text"), type: "text" }] },
-      { locale },
-    );
+    if (tpl) {
+      const res = instantiateTemplate(tpl, locale, { locale });
+      return finish(res.op, res.mainId);
+    }
+    const res = createTable({ name: t("newTable.untitled"), icon: "□", columns: [{ name: t("newTable.firstColumn"), type: "text" }] }, { locale });
     finish(res.op, res.table.id);
   };
 
@@ -132,12 +131,17 @@ export function Onboarding({ onDone, compact }: { onDone?: () => void; compact?:
               <div className="text-2xl font-extrabold tracking-tight">{tpl.name[locale]}</div>
               <div className="mt-1 text-ink-2">{tpl.description[locale]}</div>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {tpl.columns(locale).map((c) => (
+                {templateColumns(tpl, locale).map((c) => (
                   <span key={c.name} className="rounded-full bg-soft px-2.5 py-0.5 text-sm text-ink-2">
                     {c.name}
                   </span>
                 ))}
               </div>
+              {tpl.tables.length > 1 && (
+                <div className="mt-2 text-sm font-semibold text-ink-2">
+                  {t("onb.alsoCreates", { tables: tpl.tables.map((x) => x.name[locale]).join(" · ") })}
+                </div>
+              )}
             </div>
             <div>
               <div className="text-sm font-bold">{t("onb.why")}</div>
