@@ -656,7 +656,7 @@ export function GridView({
           </tfoot>
         </table>
       </div>
-      <p className="hidden pt-2 text-xs text-ink-2 lg:block">{t("grid.hint")}</p>
+      {rows.length > 0 && <p className="hidden pt-2 text-xs text-ink-2 lg:block">{t("grid.hint")}</p>}
     </div>
   );
 }

@@ -73,9 +73,12 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-:focus-visible {
-  outline: 3px solid var(--work);
-  outline-offset: 2px;
+/* In the base layer so a component's own focus style (outline-none + a border) wins. */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--work);
+    outline-offset: 2px;
+  }
 }
 
 input[type="number"]::-webkit-inner-spin-button,
@@ -103,4 +106,15 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .listening {
   animation: pulse-ring 1.2s ease-out infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }

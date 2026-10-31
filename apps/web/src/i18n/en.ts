@@ -17,7 +17,7 @@ export const en = {
   "onb.subtitle": "Pick one to start. You can add any table later.",
   "onb.pickTitle": "Tables that fit",
   "onb.pickSubtitle": "Each one is ready to use. Columns can be changed any time.",
-  "onb.why": "Better than a spreadsheet",
+  "onb.why": "What it does",
   "onb.when": "Pick it when",
   "onb.use": "Use this table",
   "onb.back": "Back",
@@ -313,7 +313,7 @@ export const en = {
   "ledger.paid": "Count as received only when ticked",
   "ledger.paidNone": "Every entry",
   "ledger.hint": "Zifra then shows income, spending and what's left, and uses it for limits and taxes in “For you”.",
-  "grid.hint": "Double-click or Enter to edit · arrows move · Ctrl+C / Ctrl+V / Ctrl+D like Excel",
+  "grid.hint": "Double-click or Enter to edit · arrows move · Ctrl+C / Ctrl+V / Ctrl+D work",
   "grid.newestFirst": "Newest first",
   "grid.oldestFirst": "Oldest first",
   "grid.cells": "{n} cells",
@@ -426,6 +426,15 @@ export const en = {
   "import.skip": "— skip —",
   "import.signHint": "Minus amounts become expenses, plus amounts income.",
   "import.nothingMapped": "Pick where at least one column goes.",
+  "hero.title": "Write what happened. Zifra does the maths.",
+  "hero.subtitle": "Money, clients, stock, tasks — in your own words, by voice or a photo of a receipt. No formulas, no setup.",
+  "hero.try": "Try:",
+  "hero.empty": "Your table appears here as you type.",
+  "hero.miss": "Add an amount, like “coffee 3.50”.",
+  "hero.keep": "Keep this table →",
+  "hero.or": "Or start with what you need",
+  "table.emptyHintEx": "Type what happened in the line above — like “{example}” — or press “Add entry”.",
+  "table.emptyHintPlain": "Type what happened in the line above, or press “Add entry”.",
 } as const;
 
 export type MessageKey = keyof typeof en;

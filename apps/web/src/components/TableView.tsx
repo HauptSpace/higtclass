@@ -1,6 +1,7 @@
 import {
   computedRows,
   displayColumn,
+  findTemplate,
   formatDate,
   formatDateNumeric,
   formatNumber,
@@ -73,6 +74,7 @@ export function TableView({ table }: { table: Table }) {
   const [column, setColumn] = useState<{ columnId: string | null } | null>(null);
   const [dialog, setDialog] = useState<"ledger" | "goal" | "import" | null>(null);
   const [menu, setMenu] = useState(false);
+  const [controls, setControls] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useDismiss(menuRef, menu, () => setMenu(false));
 
@@ -202,7 +204,21 @@ export function TableView({ table }: { table: Table }) {
           </div>
         </div>
 
-        {(table.views?.length ?? 0) > 0 && (
+        {mobile && (
+          // Phones: one quiet row instead of three rows of chips; the controls open on tap.
+          <button
+            type="button"
+            aria-expanded={controls}
+            onClick={() => setControls((c) => !c)}
+            className="mt-3 inline-flex items-center gap-2 rounded-full border-2 border-line px-3.5 py-1.5 text-sm font-bold"
+          >
+            {periodLabel(t, ui.period, settings.locale)}
+            {ui.filters.length > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-ink px-1 text-xs text-paper">{ui.filters.length}</span>}
+            {mode !== "grid" && <span className="text-ink-2">· {t(`view.${mode}`)}</span>}
+            <span className="text-ink-2">{controls ? "▴" : "▾"}</span>
+          </button>
+        )}
+        {(!mobile || controls) && (table.views?.length ?? 0) > 0 && (
           <div className="-mx-4 mt-3 flex gap-1 overflow-x-auto px-4 md:mx-0 md:px-0" role="tablist" aria-label={t("view.save")}>
             <button
               type="button"
@@ -234,7 +250,8 @@ export function TableView({ table }: { table: Table }) {
           </div>
         )}
 
-        <div className="mt-3 flex flex-col gap-2">
+        {(!mobile || controls) && (
+          <div className="mt-3 flex flex-col gap-2">
           {dateCol && (
             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
               <PeriodPicker value={ui.period} onChange={(period) => setUi({ period })} />
@@ -249,11 +266,13 @@ export function TableView({ table }: { table: Table }) {
               </button>
             )}
           </div>
-        </div>
+          </div>
+        )}
       </header>
 
       <Figures table={table} values={values} all={all} ui={ui} summary={summary} today={today} onGoal={() => setDialog("goal")} matches={matches} />
 
+      {(!mobile || controls) && (
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-10">
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1" role="tablist">
           {modes
@@ -282,6 +301,7 @@ export function TableView({ table }: { table: Table }) {
           />
         )}
       </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-28 md:px-10 md:pb-6">
         {mode === "summary" ? (
@@ -292,9 +312,11 @@ export function TableView({ table }: { table: Table }) {
           <div className="flex min-h-0 flex-1 flex-col border-t-2 border-rule">
             <AssistantBar tableId={table.id} onEdit={(preset) => setRecord({ rowId: null, preset })} />
             {table.rows.length === 0 && (mobile || mode !== "grid") ? (
-              <EmptyRows />
+              <EmptyRows template={table.template} />
             ) : rows.length === 0 && mode === "grid" && !mobile ? (
               <>
+                {/* Just the column headers, not half a screen of empty grid. */}
+                <div className="flex flex-col">
                 <GridView
                   table={table}
                   rows={rows}
@@ -308,7 +330,8 @@ export function TableView({ table }: { table: Table }) {
                   onEditColumn={(columnId) => setColumn({ columnId })}
                   onAddColumn={() => setColumn({ columnId: null })}
                 />
-                {table.rows.length === 0 ? <EmptyRows /> : <p className="py-6 text-center text-ink-2">{t("table.noMatches")}</p>}
+                </div>
+                {table.rows.length === 0 ? <EmptyRows template={table.template} /> : <p className="py-6 text-center text-ink-2">{t("table.noMatches")}</p>}
               </>
             ) : rows.length === 0 && mode !== "calendar" && mode !== "board" ? (
               <p className="py-10 text-center text-ink-2">{t("table.noMatches")}</p>
@@ -329,7 +352,7 @@ export function TableView({ table }: { table: Table }) {
               </div>
             ) : mobile || mode === "cards" ? (
               <div className="min-h-0 flex-1 md:overflow-y-auto">
-                <CardsView table={table} rows={rows} onOpenRow={(rowId) => setRecord({ rowId })} grid={!mobile} />
+                <CardsView table={table} rows={rows} onOpenRow={(rowId) => setRecord({ rowId })} grid={!mobile} byDay={mobile && !ui.sort} />
               </div>
             ) : (
               <GridView
@@ -376,7 +399,7 @@ export function TableView({ table }: { table: Table }) {
 function TableTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
   const t = useT();
   const [editing, setEditing] = useState(false);
-  const cls = "min-w-0 flex-1 text-[34px] leading-[0.98] font-extrabold tracking-[-0.045em] text-balance md:text-[60px]";
+  const cls = "min-w-0 flex-1 text-[28px] leading-[1] font-extrabold tracking-[-0.04em] text-balance md:text-[60px] md:leading-[0.98] md:tracking-[-0.045em]";
   // "Відпустка 30 000" must not break inside the number.
   const shown = name.replace(/(\d)\s(?=\d{3}\b)/g, "$1 ");
   if (editing) {
@@ -407,12 +430,15 @@ function TableTitle({ name, onRename }: { name: string; onRename: (name: string)
   );
 }
 
-function EmptyRows() {
+function EmptyRows({ template }: { template?: string }) {
   const t = useT();
+  const locale = useStore((s) => s.settings.locale);
+  // The example fits the table: "кава 85" for spending, "чохол 2" for sales.
+  const example = template ? findTemplate(template)?.example?.[locale] : undefined;
   return (
-    <div className="py-14 text-center">
+    <div className="py-12 text-center">
       <p className="text-2xl font-extrabold tracking-tight">{t("table.empty")}</p>
-      <p className="mx-auto mt-2 max-w-sm text-ink-2">{t("table.emptyHint")}</p>
+      <p className="mx-auto mt-2 max-w-sm text-ink-2">{example ? t("table.emptyHintEx", { example }) : t("table.emptyHintPlain")}</p>
     </div>
   );
 }
@@ -454,6 +480,7 @@ function Figures({
   const ws = useStore((s) => s.ws);
   const dispatch = useStore((s) => s.dispatch);
   const [choosing, setChoosing] = useState(false);
+  const mobile = useIsMobile();
   const chooseRef = useRef<HTMLDivElement>(null);
   useDismiss(chooseRef, choosing, () => setChoosing(false));
   const ledger = ledgerOf(table);
@@ -635,9 +662,12 @@ function Figures({
     others.push({ value: t("figures.of", { a: summary[c.id]?.checked ?? 0, b: values.length }), label: t("figures.checked", { name: c.name }) });
   }
 
+  // No dead zeros on an empty table; no "entries" tile on phones, where space is short.
+  if (!all.length && !table.goal && table.template !== "savings") return null;
+  if (mobile && items.length) others.splice(0, others.length, ...others.filter((o) => o.label !== t("figures.entries")));
   if (!items.length && !others.length) return null;
   return (
-    <section className="mx-4 mt-5 grid grid-cols-2 gap-x-6 gap-y-5 border-b-[3px] border-rule pb-5 md:mx-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+    <section className="mx-4 mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-b-[3px] border-rule pb-4 md:mx-10 md:mt-5 md:grid-cols-[1.4fr_1fr_1fr_1fr] md:gap-y-5 md:pb-5">
       {items}
       {others.map((f, i) => (
         <Figure key={`o${i}`} value={f.value} label={f.label} />

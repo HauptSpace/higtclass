@@ -5,7 +5,7 @@ import type { Locale, RollupAgg, Table } from "./types.ts";
 
 // Ready-made starting points, so nobody faces an empty sheet.
 // Every name is translated; formulas are built from the translated names.
-// Each template also says why it beats a plain spreadsheet and when to pick it,
+// Each template also says what it does for you and when to pick it,
 // which is what the onboarding shows. Some templates are several linked
 // tables at once (stock + sales, clients + payments), wired up already.
 
@@ -244,7 +244,7 @@ export interface Template {
   uses: UseCase[];
   name: L10n;
   description: L10n;
-  /** Why this beats doing the same thing in a plain spreadsheet. */
+  /** What it does for the person. */
   why: L10n;
   /** The situation it fits. */
   when: L10n;
@@ -254,6 +254,8 @@ export interface Template {
   main: string;
   /** Ask for a savings target right away. */
   goal?: boolean;
+  /** A first entry to suggest, as people would type it. */
+  example?: L10n;
 }
 
 const one = (
@@ -269,6 +271,7 @@ const bothLedger = (l: Locale): LedgerDraft => ({ amount: N.amount[l], kind: "bo
 export const TEMPLATES: Template[] = [
   {
     id: "budget",
+    example: tr("кофе 85", "кава 85", "coffee 3.50", "Kaffee 3,50", "café 2,50"),
     icon: "≡",
     uses: ["personal"],
     name: tr("Доходы и расходы", "Доходи та витрати", "Income & expenses", "Einnahmen & Ausgaben", "Ingresos y gastos"),
@@ -310,6 +313,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "business",
+    example: tr("материалы 450", "матеріали 450", "materials 120", "Material 45,90", "material 45,90"),
     icon: "≡",
     uses: ["finance", "services", "trade"],
     name: tr("Доходы и расходы бизнеса", "Доходи та витрати бізнесу", "Business income & costs", "Einnahmen & Ausgaben (EÜR)", "Ingresos y gastos del negocio"),
@@ -321,11 +325,11 @@ export const TEMPLATES: Template[] = [
       "Ingresos y gastos con las categorías que pide el contable",
     ),
     why: tr(
-      "Прибыль за месяц и квартал считается сама. Выгрузка в Excel — с итогами по категориям.",
-      "Прибуток за місяць і квартал рахується сам. Вивантаження в Excel — з підсумками за категоріями.",
-      "Profit per month and quarter works itself out. The Excel export has totals by category.",
-      "Gewinn pro Monat und Quartal rechnet sich selbst. Der Excel-Export hat Summen pro Kategorie.",
-      "El beneficio por mes y trimestre sale solo. La exportación a Excel trae totales por categoría.",
+      "Прибыль за месяц и квартал считается сама. Для бухгалтера — готовый файл с итогами по категориям.",
+      "Прибуток за місяць і квартал рахується сам. Для бухгалтера — готовий файл з підсумками за категоріями.",
+      "Profit per month and quarter works itself out. Your accountant gets a ready file with totals by category.",
+      "Gewinn pro Monat und Quartal rechnet sich selbst. Der Steuerberater bekommt eine fertige Datei mit Summen pro Kategorie.",
+      "El beneficio por mes y trimestre sale solo. Tu contable recibe un archivo listo con totales por categoría.",
     ),
     when: tr(
       "Вы ФОП, самозанятый или маленькая фирма и сдаёте отчёт.",
@@ -353,6 +357,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "clients_payments",
+    example: tr("Анна 12000 оплачено", "Олег 12000 оплачено", "Anna 900 paid", "Anna 900 bezahlt", "Ana 900 pagado"),
     icon: "◎",
     uses: ["services", "finance"],
     name: tr("Клиенты и оплаты", "Клієнти та оплати", "Clients & payments", "Kunden & Zahlungen", "Clientes y cobros"),
@@ -412,6 +417,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "orders",
+    example: tr("Анна торт 1500", "Анна торт 1500", "Anna cake 45", "Anna Torte 45", "Ana tarta 45"),
     icon: "◎",
     uses: ["services", "trade"],
     name: tr("Заказы", "Замовлення", "Orders", "Aufträge", "Pedidos"),
@@ -423,11 +429,11 @@ export const TEMPLATES: Template[] = [
       "Quién pidió, cuánto y si pagó",
     ),
     why: tr(
-      "Статус и оплата — кнопки, а не цвет ячейки. Сразу видно, кто не заплатил.",
-      "Статус і оплата — кнопки, а не колір клітинки. Одразу видно, хто не заплатив.",
-      "Status and payment are one tap, not a cell colour. Unpaid orders stand out at once.",
-      "Status und Zahlung sind ein Tipp statt Zellfarbe. Offene Zahlungen fallen sofort auf.",
-      "Estado y pago con un toque, no con colores de celda. Lo pendiente salta a la vista.",
+      "Статус и оплата в одно касание. Сразу видно, что в работе и кто ещё не заплатил.",
+      "Статус і оплата в один дотик. Одразу видно, що в роботі і хто ще не заплатив.",
+      "Status and payment in one tap. You see at once what's in progress and who hasn't paid.",
+      "Status und Zahlung mit einem Tipp. Sofort sichtbar, was läuft und wer noch nicht bezahlt hat.",
+      "Estado y pago con un toque. Ves al momento qué está en curso y quién no ha pagado.",
     ),
     when: tr(
       "Берёте заказы и хотите видеть, что в работе и что не оплачено.",
@@ -462,6 +468,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "stock_sales",
+    example: tr("чехол 2", "чохол 2", "case 2", "Hülle 2", "funda 2"),
     icon: "▤",
     uses: ["trade"],
     name: tr("Склад и продажи", "Склад і продажі", "Stock & sales", "Lager & Verkäufe", "Stock y ventas"),
@@ -538,11 +545,11 @@ export const TEMPLATES: Template[] = [
       "Artículos, stock y valor",
     ),
     why: tr(
-      "«Итого» считается само для каждой строки — нечего протягивать и негде ошибиться.",
-      "«Разом» рахується саме для кожного рядка — нічого протягувати й ніде помилитися.",
-      "Totals calculate themselves for every row — nothing to drag down, nothing to break.",
-      "Summen rechnen sich für jede Zeile selbst — nichts ziehen, nichts kaputt machen.",
-      "El total se calcula solo en cada fila: nada que arrastrar ni que romper.",
+      "Итог по каждой строке и по всему складу считается сам.",
+      "Підсумок по кожному рядку й по всьому складу рахується сам.",
+      "The total for each item and for the whole stock works itself out.",
+      "Die Summe pro Artikel und fürs ganze Lager rechnet sich selbst.",
+      "El total de cada artículo y de todo el stock se calcula solo.",
     ),
     when: tr(
       "Нужно знать, что лежит на складе и на какую сумму.",
@@ -561,6 +568,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "team_jobs",
+    example: tr("уборка офиса 120 завтра", "прибирання офісу 120 завтра", "office clean 120 tomorrow", "Büroreinigung 120 morgen", "limpieza oficina 120 mañana"),
     icon: "▦",
     uses: ["team", "services"],
     name: tr("Работы и команда", "Роботи та команда", "Jobs & team", "Aufträge & Team", "Trabajos y equipo"),
@@ -652,11 +660,11 @@ export const TEMPLATES: Template[] = [
       "Contactos y con quién hace tiempo que no hablas",
     ),
     why: tr(
-      "Сортировка по последнему контакту показывает, кому пора позвонить. Без CRM за деньги.",
-      "Сортування за останнім контактом показує, кому час подзвонити. Без платної CRM.",
-      "Sort by last contact to see who to call next — no paid CRM needed.",
-      "Nach letztem Kontakt sortieren und sehen, wen Sie anrufen sollten — ohne teures CRM.",
-      "Ordena por último contacto y verás a quién llamar, sin pagar un CRM.",
+      "Видно, с кем давно не говорили и кому пора позвонить.",
+      "Видно, з ким давно не говорили і кому час подзвонити.",
+      "See who you haven't talked to in a while and who to call next.",
+      "Sie sehen, mit wem Sie lange nicht gesprochen haben und wen Sie anrufen sollten.",
+      "Ves con quién hace tiempo que no hablas y a quién llamar.",
     ),
     when: tr(
       "Клиентов больше, чем помещается в голове.",
@@ -696,11 +704,11 @@ export const TEMPLATES: Template[] = [
       "Quién hace qué y para cuándo",
     ),
     why: tr(
-      "Доска по статусам и календарь сроков вместо зачёркнутого текста. Видно, что горит.",
-      "Дошка за статусами й календар термінів замість закресленого тексту. Видно, що горить.",
-      "A board by status and a calendar of due dates instead of strikethrough text. You see what's late.",
-      "Ein Board nach Status und ein Terminkalender statt durchgestrichenem Text. Man sieht, was brennt.",
-      "Un tablero por estado y un calendario de fechas en vez de texto tachado. Ves lo que urge.",
+      "Доска по статусам и календарь сроков. Сразу видно, что горит.",
+      "Дошка за статусами й календар термінів. Одразу видно, що горить.",
+      "A board by status and a calendar of due dates. You see what's urgent at a glance.",
+      "Ein Board nach Status und ein Terminkalender. Man sieht sofort, was brennt.",
+      "Un tablero por estado y un calendario de fechas. Ves de un vistazo lo urgente.",
     ),
     when: tr(
       "Работаете не один и важно, кто за что отвечает.",
@@ -729,6 +737,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "expenses",
+    example: tr("такси 450", "таксі 240", "taxi 12", "Taxi 12", "taxi 12"),
     icon: "↘",
     uses: ["personal"],
     name: tr("Расходы", "Витрати", "Expenses", "Ausgaben", "Gastos"),
@@ -769,6 +778,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "savings",
+    example: tr("5000", "5000", "200", "200", "200"),
     icon: "◔",
     uses: ["personal"],
     name: tr("Копилка с целью", "Скарбничка з ціллю", "Savings goal", "Sparziel", "Hucha con objetivo"),
@@ -803,6 +813,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "debts",
+    example: tr("Олег 500", "Олег 500", "Tom 50", "Tom 50", "Tom 50"),
     icon: "⇄",
     uses: ["personal", "finance"],
     name: tr("Долги", "Борги", "Debts", "Schulden", "Deudas"),
@@ -845,6 +856,7 @@ export const TEMPLATES: Template[] = [
   },
   {
     id: "trips",
+    example: tr("Киев — Бровары 32 км", "Київ — Бровари 32 км", "London — Oxford 95 km", "Köln — Bonn 30 km", "Madrid — Toledo 70 km"),
     icon: "↗",
     uses: ["finance", "services"],
     name: tr("Поездки на авто", "Поїздки авто", "Mileage log", "Fahrtenbuch", "Kilometraje"),

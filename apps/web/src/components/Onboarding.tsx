@@ -4,7 +4,7 @@ import { askAssistant, type AssistantFailure } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
 import { useStore } from "../store.ts";
 import { ChangeList } from "./AssistantBar.tsx";
-import { ProfileForm } from "./ForYou.tsx";
+import { Hero } from "./Hero.tsx";
 import { Button, inputClass } from "./ui.tsx";
 
 // First run (and "New table"): what is Zifra for → tables that fit, each with
@@ -84,16 +84,18 @@ export function Onboarding({ onDone, compact }: { onDone?: () => void; compact?:
   if (!use) {
     return (
       <div>
-        <h1 className={`${heading} leading-[0.95] font-extrabold tracking-[-0.04em]`}>{t("onb.title")}</h1>
-        <p className="mt-4 max-w-xl text-lg text-ink-2">{t("onb.subtitle")}</p>
-        {!compact && (
-          <section className="mt-8 rounded-2xl bg-soft p-5">
-            <div className="text-lg font-extrabold tracking-tight">{t("profile.title")}</div>
-            <p className="mb-4 text-ink-2">{t("profile.hint")}</p>
-            <ProfileForm />
-          </section>
+        {compact ? (
+          <>
+            <h1 className={`${heading} leading-[0.95] font-extrabold tracking-[-0.04em]`}>{t("onb.title")}</h1>
+            <p className="mt-4 max-w-xl text-lg text-ink-2">{t("onb.subtitle")}</p>
+          </>
+        ) : (
+          <>
+            <Hero />
+            <h2 className="mt-14 text-2xl font-extrabold tracking-tight md:text-3xl">{t("hero.or")}</h2>
+          </>
         )}
-        <div className="mt-8 grid border-t-2 border-rule sm:grid-cols-2">
+        <div className="mt-6 grid border-t-2 border-rule sm:grid-cols-2">
           {USE_CASES.map((u, i) => (
             <button
               key={u.id}
