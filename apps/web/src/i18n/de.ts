@@ -419,7 +419,7 @@ export const de: Messages = {
   "photo.remove": "Entfernen",
   "photo.failed": "Das ist kein Bild.",
   "ai.notImage": "Diese Datei ist kein Bild. Für Excel oder CSV gibt es „Importieren“.",
-  "problem.currency_mismatch": "„{input}“ ist in einer anderen Währung als „{column}“. Legen Sie eine Spalte in dieser Währung an oder rechnen Sie um.",
+  "problem.currency_mismatch": "„{input}“ ist in einer anderen Währung als „{column}“, und der Tageskurs ist nicht verfügbar (kein Internet?). Legen Sie eine Spalte in dieser Währung an oder rechnen Sie um.",
   "figures.vsPrevQuarter": "{delta} zum Vorquartal",
   "figures.vsPrevYear": "{delta} zum Vorjahr",
   "figures.belowZero": "unter null: {column}",
@@ -477,4 +477,9 @@ export const de: Messages = {
   "cloud.err.short_password": "Das Passwort braucht mindestens 8 Zeichen.",
   "cloud.err.too_many": "Zu viele Versuche. In 10 Minuten erneut.",
   "cloud.err.invite_expired": "Dieser Einladungslink ist abgelaufen. Bitten Sie um einen neuen.",
+  "country.PL": "Polen",
+  "country.ES": "Spanien",
+  "regime.pl_jdg": "JDG (Einzelunternehmen), ohne USt",
+  "regime.pl_jdg_vat": "JDG mit USt",
+  "regime.es_autonomo": "Autónomo",
 };

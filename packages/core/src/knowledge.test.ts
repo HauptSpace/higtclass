@@ -77,3 +77,19 @@ describe("for-you rules", () => {
     expect(isRulePack({ version: "x" })).toBe(false);
   });
 });
+
+describe("more countries", () => {
+  it("knows Polish and Spanish holidays and deadlines", async () => {
+    const { polishHolidays, spanishHolidays } = await import("./knowledge.ts");
+    expect(polishHolidays(2026).find((h) => h.name === "Boże Ciało")!.date).toBe("2026-06-04");
+    expect(spanishHolidays(2026).find((h) => h.name === "Viernes Santo")!.date).toBe("2026-04-03");
+    const pl = upcomingDeadlines(DEFAULT_RULES, { country: "PL", occupation: "self", regime: "pl_jdg_vat" }, "2026-10-30", 30).map((u) => [u.deadline.id, u.date]);
+    expect(pl).toEqual([
+      ["pl_zus", "2026-11-20"],
+      ["pl_pit_advance", "2026-11-20"],
+      ["pl_vat", "2026-11-25"],
+    ]);
+    const es = upcomingDeadlines(DEFAULT_RULES, { country: "ES", occupation: "self", regime: "es_autonomo" }, "2027-01-02", 40);
+    expect(es.map((u) => [u.deadline.id, u.date])).toEqual([["es_quarterly", "2027-02-01"]]);
+  });
+});

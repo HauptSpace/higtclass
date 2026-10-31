@@ -317,3 +317,28 @@ describe("money, round 2", () => {
     expect(incomeBetween(ws, "2026-10-01", "2026-12-31", "2026-10-30").total).toBe(1000);
   });
 });
+
+describe("excel formulas", () => {
+  it("translates row formulas and column sums", async () => {
+    const { excelFormula } = await import("./formula.ts");
+    const cells: Record<string, string> = { Кількість: "C5", Ціна: "D5", Оплачено: "E5" };
+    expect(excelFormula("[Кількість] * [Ціна]", (n) => cells[n] ?? null, () => null)).toBe("=(C5*D5)");
+    expect(excelFormula("ЯКЩО([Оплачено]; ОКРУГЛИТИ([Ціна] * 5 / 100; 2); 0)", (n) => cells[n] ?? null, () => null)).toBe("=IF(E5,ROUND(((D5*5)/100),2),0)");
+    expect(excelFormula("30000 - СУМ([Ціна])", () => null, (n) => (n === "Ціна" ? "D2:D40" : null))).toBe("=(30000-SUM(D2:D40))");
+    expect(excelFormula("[Нема] * 2", () => null, () => null)).toBeNull();
+  });
+});
+
+describe("currency conversion", () => {
+  it("converts dollars at the official rate and keeps the original in the note", () => {
+    const { ws, mainId } = fromTemplate("clients_payments", "uk");
+    const t = tableOf(ws, mainId);
+    const rates = { base: "UAH", date: "2026-10-31", source: "НБУ", rates: { USD: 41.25 } };
+    const res = addRecords(t, [{ Сума: "$800" }], { locale: "uk", now, ws, currency: "UAH", rates });
+    expect(res.problems).toEqual([]);
+    const sum = t.columns.find((c) => c.name === "Сума")!;
+    const note = t.columns.find((c) => c.name === "Коментар")!;
+    expect(res.rows[0].values[sum.id]).toBe(33000);
+    expect(res.rows[0].values[note.id]).toBe("800 USD × 41,25 (НБУ 2026-10-31)");
+  });
+});

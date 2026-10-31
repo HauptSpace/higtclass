@@ -7,6 +7,7 @@ import { cors } from "hono/cors";
 import { AssistantError, runAssistant, type AssistantRequest } from "./assistant.ts";
 import { cloudRoutes } from "./cloud.ts";
 import { openDb, type Db } from "./db.ts";
+import { ratesFor } from "./rates.ts";
 
 export function createApp({ db, client }: { db: Db; client: Anthropic | null }) {
   const app = new Hono();
@@ -14,6 +15,18 @@ export function createApp({ db, client }: { db: Db; client: Anthropic | null }) 
   app.use("/api/*", cors({ origin: (process.env.ZIFRA_ORIGINS ?? "*").split(","), allowHeaders: ["content-type", "authorization"] }));
 
   app.get("/api/health", (c) => c.json({ ok: true, assistant: client !== null }));
+
+  // Exchange rates for amounts typed in another currency.
+  app.get("/api/rates", async (c) => {
+    const base = (c.req.query("base") ?? "EUR").toUpperCase();
+    if (!/^[A-Z]{3}$/.test(base)) return c.json({ error: "bad_request" }, 400);
+    try {
+      return c.json(await ratesFor(base));
+    } catch (e) {
+      console.error("Rates unavailable", e);
+      return c.json({ error: "rates_unavailable" }, 502);
+    }
+  });
 
   // Accounts, shared workspaces, sync and invites.
   app.route("/api", cloudRoutes(db));

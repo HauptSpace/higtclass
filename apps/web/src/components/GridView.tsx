@@ -156,7 +156,7 @@ export function GridView({
   const inRange = (r: number, c: number) => !!range && r >= range.r0 && r <= range.r1 && c >= range.c0 && c <= range.c1;
   const rangeSize = range ? (range.r1 - range.r0 + 1) * (range.c1 - range.c0 + 1) : 0;
 
-  const ctx = { locale: settings.locale, ws, currency: settings.currency };
+  const ctx = { locale: settings.locale, ws, currency: settings.currency, rates: useStore.getState().exchange ?? undefined };
 
   const apply = useCallback(
     (op: Op, label: string, touched: string[]) => {

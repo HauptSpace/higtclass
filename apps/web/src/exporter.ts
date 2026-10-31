@@ -3,6 +3,7 @@ import {
   computedRows,
   dateOrder,
   displayColumn,
+  excelFormula,
   formatDateNumeric,
   ledgerOf,
   LOCALE_RULES,
@@ -85,10 +86,23 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
   };
   const formats = table.columns.map((c, i) => numberFormat(c, kinds[i], values.map((v) => v[c.id])));
   const header = table.columns.map((c) => ({ value: c.name, fontWeight: "bold" as const }));
-  const body = values.map((v) =>
+  // Formulas stay formulas ("=C2*D2"), so the file keeps calculating in Excel.
+  const letter = (i: number): string => (i >= 26 ? letter(Math.floor(i / 26) - 1) : "") + String.fromCharCode(65 + (i % 26));
+  const index = new Map(table.columns.map((c, i) => [c.name.toLowerCase(), i]));
+  const lastRow = values.length + 1;
+  const body = values.map((v, r) =>
     table.columns.map((c, i) => {
       const value: CellValue | undefined = v[c.id];
       const shown = kinds[i];
+      if (c.type === "formula" && c.formula) {
+        const at = (name: string) => index.get(name.trim().toLowerCase());
+        const formula = excelFormula(
+          c.formula,
+          (name) => (at(name) === undefined ? null : `${letter(at(name)!)}${r + 2}`),
+          (name) => (at(name) === undefined ? null : `${letter(at(name)!)}2:${letter(at(name)!)}${lastRow}`),
+        );
+        if (formula) return { value: formula, type: "Formula", format: formats[i] };
+      }
       if (c.type === "checkbox") return { value: value === true, type: Boolean };
       if (value === null || value === undefined || value === "") return null;
       if (typeof value === "number") return { value, type: Number, format: formats[i] };
@@ -105,7 +119,7 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
     if (c.type === "lookup") return null;
     const nums = values.map((v) => v[c.id]).filter((x): x is number => typeof x === "number");
     if (!nums.length) return null;
-    return { value: nums.reduce((a, b) => a + b, 0), type: Number, format: formats[i], fontWeight: "bold" as const };
+    return { value: `=SUM(${letter(i)}2:${letter(i)}${lastRow})`, type: "Formula", format: formats[i], fontWeight: "bold" as const };
   });
   const widths = table.columns.map((c) => {
     const longest = Math.max(c.name.length, ...values.slice(0, 500).map((v) => cellText(ws, table, c, v[c.id], settings).length));

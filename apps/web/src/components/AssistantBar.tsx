@@ -1,4 +1,4 @@
-import { addRecords, parseQuickEntries, type CellValue, type Op, type RawRecord } from "@higtclass/core";
+import { addRecords, ledgerOf, parseQuickEntries, type CellValue, type Op, type RawRecord } from "@higtclass/core";
 import { useRef, useState } from "react";
 import { askAssistant, describeOps, readPhoto, type AssistantFailure, type PhotoInput } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
@@ -61,6 +61,44 @@ export function ChangeList({ ops }: { ops: Op[] }) {
   );
 }
 
+/** Income or expense, one tap to correct a guess ("Fam. Schneider 1250" is income). */
+function FlowToggle({ tableId, record, onChange }: { tableId: string; record: RawRecord; onChange: (record: RawRecord, ops: Op[]) => void }) {
+  const ws = useStore((s) => s.ws);
+  const settings = useStore((s) => s.settings);
+  const table = ws.tables.find((tb) => tb.id === tableId);
+  const ledger = table ? ledgerOf(table) : null;
+  const typeCol = ledger?.kind === "both" && ledger.typeColumnId ? table!.columns.find((c) => c.id === ledger.typeColumnId) : undefined;
+  if (!table || !typeCol) return null;
+  const income = ledger!.incomeValues?.[0];
+  const expense = (typeCol.options ?? []).find((o) => !ledger!.incomeValues?.includes(o));
+  const current = String(record[typeCol.id] ?? typeCol.default ?? expense ?? "");
+  const pick = (value: string) => {
+    const next: RawRecord = { ...record, [typeCol.id]: value };
+    // A category that belongs to the other side no longer fits.
+    for (const c of table.columns) {
+      const v = next[c.id];
+      if (c.scope?.columnId === typeCol.id && typeof v === "string" && c.scope.map[v] && c.scope.map[v] !== value) delete next[c.id];
+    }
+    const res = addRecords(table, [next], { locale: settings.locale, ws, currency: settings.currency, rates: useStore.getState().exchange ?? undefined });
+    if (!res.problems.length) onChange(next, [res.op]);
+  };
+  return (
+    <div className="mb-3 inline-flex gap-1 rounded-full bg-paper p-0.5" role="group">
+      {[income, expense].filter((x): x is string => !!x).map((o) => (
+        <button
+          key={o}
+          type="button"
+          aria-pressed={current === o}
+          onClick={() => pick(o)}
+          className={`rounded-full px-3.5 py-1 text-sm font-bold ${current === o ? (o === income ? "bg-paid text-white" : "bg-ink text-paper") : "text-ink-2"}`}
+        >
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (preset: Record<string, string>) => void }) {
   const t = useT();
   const ws = useStore((s) => s.ws);
@@ -82,7 +120,7 @@ export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (p
   const quick = (msg: string): { ops: Op[]; record?: RawRecord } | null => {
     const table = ws.tables.find((tb) => tb.id === tableId);
     if (!table || !msg) return null;
-    const ctx = { locale: settings.locale, ws, currency: settings.currency };
+    const ctx = { locale: settings.locale, ws, currency: settings.currency, rates: useStore.getState().exchange ?? undefined };
     const entries = parseQuickEntries(table, msg, ctx);
     if (!entries) return null;
     const res = addRecords(table, entries.map((e) => e.record), ctx);
@@ -208,6 +246,7 @@ export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (p
         <div className="px-4 pb-4 md:pl-[7.5rem]">
           {phase.reply && <p className="mb-3 text-ink-2">{phase.reply}</p>}
           {phase.local && <p className="mb-2 text-xs font-bold tracking-wide text-ink-2 uppercase">{t("ai.local")}</p>}
+          {phase.record && <FlowToggle tableId={tableId} record={phase.record} onChange={(record, ops) => setPhase({ ...phase, record, ops })} />}
           <ChangeList ops={phase.ops} />
           <div className="mt-4 flex gap-2">
             <Button variant="primary" onClick={save}>

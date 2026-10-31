@@ -103,6 +103,8 @@ interface State {
   /** This device, so its own changes aren't applied twice when they come back. */
   clientId: string;
   sync: SyncState;
+  /** Today's exchange rates into the workspace currency (for "$800"). */
+  exchange: { base: string; date: string; source: string; rates: Record<string, number>; fetched: number } | null;
 
   dispatch: (op: Op, label?: string) => boolean;
   undo: () => void;
@@ -193,6 +195,7 @@ export const useStore = create<State>()(
       pending: [],
       clientId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()),
       sync: "off",
+      exchange: null,
 
       dispatch(op, label = "") {
         const { ws, past, cloud, pending } = getState();
@@ -339,6 +342,7 @@ export const useStore = create<State>()(
         cloud: s.cloud,
         pending: s.pending,
         clientId: s.clientId,
+        exchange: s.exchange,
       }),
     },
   ),

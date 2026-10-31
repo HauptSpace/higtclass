@@ -124,7 +124,7 @@ export function whenText(t: Translate, daysLeft: number) {
   return t("forYou.inDays", { n: daysLeft });
 }
 
-const COUNTRY_CURRENCY: Partial<Record<Country, string>> = { DE: "EUR", UA: "UAH" };
+const COUNTRY_CURRENCY: Partial<Record<Country, string>> = { DE: "EUR", UA: "UAH", PL: "PLN", ES: "EUR" };
 
 export function ProfileForm({ onDone }: { onDone?: () => void }) {
   const t = useT();
@@ -158,7 +158,7 @@ export function ProfileForm({ onDone }: { onDone?: () => void }) {
       {draft.occupation && (
         <div>
           <div className="mb-2 text-sm font-semibold text-ink-2">{t("profile.country")}</div>
-          <Chips<Country> value={draft.country ?? null} options={["UA", "DE", "other"]} label={(o) => t(`country.${o}`)} onPick={(country) => update({ country })} />
+          <Chips<Country> value={draft.country ?? null} options={["UA", "DE", "PL", "ES", "other"]} label={(o) => t(`country.${o}`)} onPick={(country) => update({ country })} />
         </div>
       )}
       {draft.country && draft.occupation && draft.occupation !== "personal" && regimes.length > 1 && (

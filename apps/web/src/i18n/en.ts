@@ -418,7 +418,7 @@ export const en = {
   "photo.remove": "Remove",
   "photo.failed": "That isn't a picture.",
   "ai.notImage": "That file isn't a picture. For Excel or CSV use “Import”.",
-  "problem.currency_mismatch": "“{input}” is in another currency than “{column}”. Add a column in that currency, or convert the amount.",
+  "problem.currency_mismatch": "“{input}” is in another currency than “{column}”, and today's rate isn't available (no internet?). Add a column in that currency or convert the amount.",
   "figures.vsPrevQuarter": "{delta} vs last quarter",
   "figures.vsPrevYear": "{delta} vs last year",
   "figures.belowZero": "below zero: {column}",
@@ -476,6 +476,11 @@ export const en = {
   "cloud.err.short_password": "The password needs at least 8 characters.",
   "cloud.err.too_many": "Too many attempts. Try again in 10 minutes.",
   "cloud.err.invite_expired": "This invite link has expired. Ask for a new one.",
+  "country.PL": "Poland",
+  "country.ES": "Spain",
+  "regime.pl_jdg": "JDG (sole trader), no VAT",
+  "regime.pl_jdg_vat": "JDG with VAT",
+  "regime.es_autonomo": "Autónomo",
 } as const;
 
 export type MessageKey = keyof typeof en;

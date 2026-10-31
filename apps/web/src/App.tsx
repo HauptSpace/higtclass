@@ -2,7 +2,7 @@ import { setRegion } from "@higtclass/core";
 import { useEffect, useState } from "react";
 import { AccountDialog, ShareDialog, useInviteLink } from "./components/Account.tsx";
 import { ForYouView, useRulesSync } from "./components/ForYou.tsx";
-import { useCloudSync } from "./cloud.ts";
+import { useCloudSync, useExchangeRates } from "./cloud.ts";
 import { ImportDialog } from "./components/ImportDialog.tsx";
 import { NewTableDialog } from "./components/NewTableDialog.tsx";
 import { ReportDialog, ReportView } from "./components/Reports.tsx";
@@ -65,6 +65,7 @@ export function App() {
   setRegion(settings.region);
   useRulesSync();
   useCloudSync();
+  useExchangeRates();
   const [signIn, setSignIn] = useState(false);
   const [share, setShare] = useState(false);
   useInviteLink(() => setSignIn(true));

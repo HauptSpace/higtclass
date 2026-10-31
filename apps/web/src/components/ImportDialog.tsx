@@ -132,7 +132,7 @@ export function ImportDialog({ open, onClose, targetTableId }: { open: boolean; 
         }
         return rec;
       });
-      const res = addRecords(targetTable, records, { locale, ws, currency: useStore.getState().settings.currency });
+      const res = addRecords(targetTable, records, { locale, ws, currency: useStore.getState().settings.currency, rates: useStore.getState().exchange ?? undefined });
       return { op: res.op, count: res.rows.length, problems: res.problems, tableId: targetTable.id, signs: !!typeCol && !typeMapped };
     }
     const res = createTable({ name: name || untitled, icon: "□", columns: plan.columns, rows: plan.rows }, { locale });

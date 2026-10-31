@@ -174,3 +174,22 @@ const CONFLICT: Record<string, string> = {
   es: "Alguien cambió lo mismo antes: mostramos la versión compartida.",
 };
 const conflictText = (l: string) => CONFLICT[l] ?? CONFLICT.en;
+
+/** Keep today's exchange rates for the workspace currency (refreshed twice a day, when online). */
+export function useExchangeRates() {
+  const currency = useStore((s) => s.settings.currency);
+  const hydrated = useStore((s) => s.hydrated);
+  useEffect(() => {
+    if (!hydrated) return;
+    const have = useStore.getState().exchange;
+    if (have && have.base === currency && Date.now() - have.fetched < 12 * 3600_000) return;
+    fetch(`${API}/api/rates?base=${currency}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r: { base: string; date: string; source: string; rates: Record<string, number> } | null) => {
+        if (r?.rates && r.base === currency) useStore.setState({ exchange: { ...r, fetched: Date.now() } });
+      })
+      .catch(() => {
+        /* offline: amounts in another currency are refused with a clear message */
+      });
+  }, [hydrated, currency]);
+}

@@ -93,7 +93,7 @@ export function RecordDialog({
     // Reset only when the dialog opens or switches row.
   }, [open, rowId, top?.rowId, top?.tableId]);
 
-  const ctx = { locale: settings.locale, ws, currency: settings.currency };
+  const ctx = { locale: settings.locale, ws, currency: settings.currency, rates: useStore.getState().exchange ?? undefined };
 
   // Preview of calculated columns while typing: price from the product, totals.
   const preview = useMemo(() => {

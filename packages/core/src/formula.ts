@@ -608,3 +608,53 @@ export function rowValues(table: Table, row: Row, today: string, ws?: Workspace)
   for (const [id, cell] of Object.entries(computed)) values[id] = "value" in cell ? cell.value : null;
   return values;
 }
+
+const EXCEL_FUNCTIONS: Record<string, string> = { ROUND: "ROUND", ABS: "ABS", MIN: "MIN", MAX: "MAX", IF: "IF", SUM: "SUM", AVERAGE: "AVERAGE", COUNT: "COUNTA" };
+
+/**
+ * The same formula in Excel's own language ("=C2*D2", "=SUM(C2:C40)"), so an
+ * exported file keeps calculating when the accountant edits it. `cell` gives a
+ * column's cell in this row ("C2"), `range` the whole column ("C2:C40");
+ * null for anything Excel can't express — that column is exported as values.
+ */
+export function excelFormula(src: string, cell: (name: string) => string | null, range: (name: string) => string | null): string | null {
+  let node: Node;
+  try {
+    node = compile(src);
+  } catch {
+    return null;
+  }
+  const fail = () => {
+    throw new FormulaError("ref", "Not expressible in Excel");
+  };
+  const quote = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const walk = (n: Node): string => {
+    switch (n.k) {
+      case "num":
+        return String(n.v);
+      case "str":
+        return quote(n.v);
+      case "bool":
+        return n.v ? "TRUE" : "FALSE";
+      case "ref":
+        return cell(n.name) ?? fail();
+      case "neg":
+        return `-(${walk(n.e)})`;
+      case "bin":
+        return `(${walk(n.l)}${n.op}${walk(n.r)})`;
+      case "call": {
+        if (n.fn === "TODAY") return "TODAY()";
+        if (n.fn === "DAYS") return `DAYS(${walk(n.args[0])},${walk(n.args[1])})`;
+        const fn = EXCEL_FUNCTIONS[n.fn] ?? fail();
+        // SUM([Amount]) over the whole column becomes a range.
+        if (["SUM", "AVERAGE", "COUNT"].includes(n.fn) && n.args.length === 1 && n.args[0].k === "ref") return `${fn}(${range(n.args[0].name) ?? fail()})`;
+        return `${fn}(${n.args.map(walk).join(",")})`;
+      }
+    }
+  };
+  try {
+    return `=${walk(node)}`;
+  } catch {
+    return null;
+  }
+}

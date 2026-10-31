@@ -419,7 +419,7 @@ export const uk: Messages = {
   "photo.remove": "Прибрати",
   "photo.failed": "Це не зображення.",
   "ai.notImage": "Цей файл — не зображення. Для Excel чи CSV є «Завантажити».",
-  "problem.currency_mismatch": "«{input}» — в іншій валюті, ніж «{column}». Додайте колонку в цій валюті або перерахуйте суму.",
+  "problem.currency_mismatch": "«{input}» — в іншій валюті, ніж «{column}», а курсу зараз немає (немає інтернету?). Додайте колонку в цій валюті або перерахуйте суму.",
   "figures.vsPrevQuarter": "{delta} до минулого кварталу",
   "figures.vsPrevYear": "{delta} до минулого року",
   "figures.belowZero": "в мінусі: {column}",
@@ -477,4 +477,9 @@ export const uk: Messages = {
   "cloud.err.short_password": "Пароль — щонайменше 8 символів.",
   "cloud.err.too_many": "Забагато спроб. Спробуйте за 10 хвилин.",
   "cloud.err.invite_expired": "Посилання-запрошення застаріло. Попросіть нове.",
+  "country.PL": "Польща",
+  "country.ES": "Іспанія",
+  "regime.pl_jdg": "JDG (ФОП), без ПДВ",
+  "regime.pl_jdg_vat": "JDG з ПДВ",
+  "regime.es_autonomo": "Autónomo",
 };

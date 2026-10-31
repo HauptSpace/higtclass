@@ -419,7 +419,7 @@ export const es: Messages = {
   "photo.remove": "Quitar",
   "photo.failed": "No es una imagen.",
   "ai.notImage": "Ese archivo no es una imagen. Para Excel o CSV usa «Importar».",
-  "problem.currency_mismatch": "«{input}» está en otra moneda que «{column}». Añade una columna en esa moneda o convierte el importe.",
+  "problem.currency_mismatch": "«{input}» está en otra moneda que «{column}» y no hay tipo de cambio ahora (¿sin internet?). Añade una columna en esa moneda o convierte el importe.",
   "figures.vsPrevQuarter": "{delta} frente al trimestre anterior",
   "figures.vsPrevYear": "{delta} frente al año anterior",
   "figures.belowZero": "en negativo: {column}",
@@ -477,4 +477,9 @@ export const es: Messages = {
   "cloud.err.short_password": "La contraseña necesita al menos 8 caracteres.",
   "cloud.err.too_many": "Demasiados intentos. Prueba en 10 minutos.",
   "cloud.err.invite_expired": "Este enlace ha caducado. Pide uno nuevo.",
+  "country.PL": "Polonia",
+  "country.ES": "España",
+  "regime.pl_jdg": "JDG (autónomo), sin IVA",
+  "regime.pl_jdg_vat": "JDG con IVA",
+  "regime.es_autonomo": "Autónomo",
 };

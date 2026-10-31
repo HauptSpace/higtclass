@@ -3,7 +3,9 @@ import { matchLinkTarget, rowLabel } from "./links.ts";
 import type { CellChange, Op } from "./ops.ts";
 import type { CellValue, Column, ColumnType, Ledger, Locale, Row, Table, Workspace } from "./types.ts";
 import { isComputed } from "./types.ts";
-import { convertValue, currencyIn, parseValue } from "./values.ts";
+import { convertValue, currencyIn, formatNumber, parseNumber, parseValue } from "./values.ts";
+
+const NOTE_NAME = /(коммент|комент|примеч|приміт|опис|note|notiz|nota|descr|beschreib)/i;
 
 // User-level actions built on top of operations. Commands take raw input
 // (strings the user typed or dictated), validate and parse it, and return
@@ -16,6 +18,8 @@ export interface CommandContext {
   ws?: Workspace;
   /** The workspace currency: "$800" typed into a hryvnia column is refused, not saved as 800 ₴. */
   currency?: string;
+  /** Today's exchange rates into the workspace currency; with them "$800" is converted instead of refused. */
+  rates?: { base: string; date: string; source: string; rates: Record<string, number> };
 }
 
 export interface ColumnDraft {
@@ -146,7 +150,17 @@ function parseRecords(
       const typed = col.type === "money" && typeof raw === "string" ? currencyIn(raw) : null;
       const expected = col.currency ?? ctx.currency;
       if (typed && expected && typed !== expected) {
-        problems.push({ columnId: col.id, column: col.name, input: raw, reason: "currency_mismatch" });
+        const rate = ctx.rates?.base === expected ? ctx.rates.rates[typed] : undefined;
+        const amount = parseNumber(raw, ctx.locale, { money: true });
+        if (!rate || amount === null) {
+          problems.push({ columnId: col.id, column: col.name, input: raw, reason: "currency_mismatch" });
+          continue;
+        }
+        // Converted at today's official rate; the original amount and rate go into the note.
+        out[col.id] = Math.round(amount * rate * 100) / 100;
+        const note = columns.find((c) => c.type === "text" && NOTE_NAME.test(c.name));
+        const text = `${formatNumber(amount, ctx.locale)} ${typed} × ${formatNumber(rate, ctx.locale, undefined, 4)} (${ctx.rates!.source} ${ctx.rates!.date})`;
+        if (note && !Object.keys(record).some((k) => resolveColumn(columns, k) === note)) out[note.id] = text;
         continue;
       }
       let v = parseValue(col, raw, ctx.locale, ctx.now);

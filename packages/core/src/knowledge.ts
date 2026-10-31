@@ -8,7 +8,7 @@ import type { ColumnType, Workspace } from "./types.ts";
 // the server without shipping a new app. Facts change every year; every item
 // links to its source and the app always says "check with your accountant".
 
-export type Country = "DE" | "UA" | "other";
+export type Country = "DE" | "UA" | "PL" | "ES" | "other";
 export type Occupation = "personal" | "self" | "company";
 export type TaxRegime =
   | "none"
@@ -19,7 +19,10 @@ export type TaxRegime =
   | "ua_fop2"
   | "ua_fop3"
   | "ua_fop3_vat"
-  | "ua_general";
+  | "ua_general"
+  | "pl_jdg"
+  | "pl_jdg_vat"
+  | "es_autonomo";
 
 /** German federal states, for regional public holidays. */
 export type Bundesland = "BW" | "BY" | "BE" | "BB" | "HB" | "HH" | "HE" | "MV" | "NI" | "NW" | "RP" | "SL" | "SN" | "ST" | "SH" | "TH";
@@ -54,6 +57,8 @@ export interface Profile {
 export const REGIMES: Record<Country, TaxRegime[]> = {
   DE: ["de_klein", "de_ust_quarterly", "de_ust_monthly", "none"],
   UA: ["ua_fop1", "ua_fop2", "ua_fop3", "ua_fop3_vat", "ua_general", "none"],
+  PL: ["pl_jdg", "pl_jdg_vat", "none"],
+  ES: ["es_autonomo", "none"],
   other: ["none"],
 };
 
@@ -133,6 +138,10 @@ const SRC = {
   ustg18: "https://www.gesetze-im-internet.de/ustg_1980/__18.html",
   ao149: "https://www.gesetze-im-internet.de/ao_1977/__149.html",
   fop3: "https://buhplatforma.com.ua/news/109482-fop-3-grupa-u-2026-rotsi-limity-ta-podatky",
+  plZus: "https://www.zus.pl/firmy/rozliczenia-z-zus/terminy-oplacania-skladek",
+  plPit: "https://www.podatki.gov.pl/pit/",
+  plVat: "https://www.podatki.gov.pl/jpk/",
+  esAeat: "https://sede.agenciatributaria.gob.es/Sede/calendario-contribuyente.html",
   fopCalendar: "https://buhplatforma.com.ua/news/128232-fop-3-grupa-kalendar-zvitnosti-ta-splaty-podatkiv-za-iii-kvartal-2026-roku-shpargalka",
 };
 
@@ -194,6 +203,19 @@ export const DEFAULT_RULES: RulePack = {
         "Lo que tu asesor necesita a fin de año: ingresos y gastos por categoría, exportados a Excel.",
       ),
       action: { type: "template", templateId: "business", coveredBy: ["business"] },
+    },
+    {
+      id: "plEs_books",
+      when: { country: ["PL", "ES"], occupation: ["self", "company"] },
+      title: tr("Доходы и расходы бизнеса", "Доходи та витрати бізнесу", "Business income & costs", "Einnahmen & Ausgaben", "Ingresos y gastos del negocio"),
+      body: tr(
+        "Доходы и расходы по категориям, с итогами по месяцам и кварталам — для отчёта и бухгалтера.",
+        "Доходи й витрати за категоріями, з підсумками за місяцями й кварталами — для звіту й бухгалтера.",
+        "Income and costs by category, with monthly and quarterly totals — for your returns and accountant.",
+        "Einnahmen und Ausgaben nach Kategorie, mit Monats- und Quartalssummen — für Erklärungen und Buchhaltung.",
+        "Ingresos y gastos por categoría, con totales por mes y trimestre, para tus declaraciones y tu gestor.",
+      ),
+      action: { type: "template", templateId: "business", coveredBy: ["business", "clients_payments", "orders", "stock_sales", "team_jobs"] },
     },
     {
       id: "de_trips",
@@ -357,6 +379,44 @@ export const DEFAULT_RULES: RulePack = {
       source: "https://www.gesetze-im-internet.de/estg/__37.html",
       schedule: { kind: "dates", dates: [{ month: 3, day: 10 }, { month: 6, day: 10 }, { month: 9, day: 10 }, { month: 12, day: 10 }] },
       shiftWeekend: true,
+    },
+    {
+      id: "pl_zus",
+      when: { country: ["PL"], regime: ["pl_jdg", "pl_jdg_vat"] },
+      title: tr("Взносы ZUS за прошлый месяц", "Внески ZUS за минулий місяць", "ZUS contributions for last month", "ZUS-Beiträge für den Vormonat", "Cotizaciones ZUS del mes anterior"),
+      body: tr("Социальные и медицинские взносы предпринимателя.", "Соціальні та медичні внески підприємця.", "Your social and health contributions.", "Ihre Sozial- und Krankenversicherungsbeiträge.", "Tus cotizaciones sociales y de salud."),
+      source: SRC.plZus,
+      schedule: { kind: "monthly", day: 20 },
+      shiftWeekend: true,
+    },
+    {
+      id: "pl_pit_advance",
+      when: { country: ["PL"], regime: ["pl_jdg", "pl_jdg_vat"] },
+      title: tr("Аванс подоходного налога (PIT)", "Аванс податку на доходи (PIT)", "Income tax advance (PIT)", "Einkommensteuer-Vorauszahlung (PIT)", "Pago a cuenta del IRPF (PIT)"),
+      body: tr("За прошлый месяц, если платите помесячно.", "За минулий місяць, якщо платите щомісяця.", "For last month, if you pay monthly.", "Für den Vormonat, bei monatlicher Zahlung.", "Del mes anterior, si pagas mensualmente."),
+      source: SRC.plPit,
+      schedule: { kind: "monthly", day: 20 },
+      shiftWeekend: true,
+      amounts: [{ label: tr("Доход за месяц", "Дохід за місяць", "Income for the month", "Einnahmen im Monat", "Ingresos del mes"), rate: 0 }],
+    },
+    {
+      id: "pl_vat",
+      when: { country: ["PL"], regime: ["pl_jdg_vat"] },
+      title: tr("JPK_V7 и НДС за прошлый месяц", "JPK_V7 і ПДВ за минулий місяць", "JPK_V7 and VAT for last month", "JPK_V7 und USt für den Vormonat", "JPK_V7 e IVA del mes anterior"),
+      body: tr("Отправить отчёт и оплатить НДС.", "Подати звіт і сплатити ПДВ.", "File the return and pay the VAT.", "Meldung abgeben und USt zahlen.", "Presentar la declaración y pagar el IVA."),
+      source: SRC.plVat,
+      schedule: { kind: "monthly", day: 25 },
+      shiftWeekend: true,
+    },
+    {
+      id: "es_quarterly",
+      when: { country: ["ES"], regime: ["es_autonomo"] },
+      title: tr("Модели 303 (IVA) и 130 (IRPF) за квартал", "Моделі 303 (IVA) і 130 (IRPF) за квартал", "Models 303 (VAT) and 130 (income tax) for the quarter", "Modelle 303 (USt) und 130 (ESt) für das Quartal", "Modelos 303 (IVA) y 130 (IRPF) del trimestre"),
+      body: tr("Квартальные декларации автономо в Hacienda.", "Квартальні декларації автономо в Hacienda.", "Quarterly returns for autónomos to Hacienda.", "Quartalserklärungen für Autónomos an Hacienda.", "Declaraciones trimestrales de autónomos ante Hacienda."),
+      source: SRC.esAeat,
+      schedule: { kind: "dates", dates: [{ month: 1, day: 30 }, { month: 4, day: 20 }, { month: 7, day: 20 }, { month: 10, day: 20 }] },
+      shiftWeekend: true,
+      amounts: [{ label: tr("Доход за квартал", "Дохід за квартал", "Income for the quarter", "Einnahmen im Quartal", "Ingresos del trimestre"), rate: 0 }],
     },
     {
       id: "ua_fop_monthly_tax",
@@ -562,12 +622,57 @@ export function germanHolidays(year: number, state?: Bundesland): Holiday[] {
   ].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Public holidays in Poland (shops, banks and offices closed). */
+export function polishHolidays(year: number): Holiday[] {
+  const e = easter(year);
+  const plus = (days: number) => {
+    const d = new Date(e);
+    d.setDate(d.getDate() + days);
+    return iso(d);
+  };
+  return [
+    { date: `${year}-01-01`, name: "Nowy Rok" },
+    { date: `${year}-01-06`, name: "Trzech Króli" },
+    { date: plus(1), name: "Poniedziałek Wielkanocny" },
+    { date: `${year}-05-01`, name: "Święto Pracy" },
+    { date: `${year}-05-03`, name: "Święto Konstytucji 3 Maja" },
+    { date: plus(60), name: "Boże Ciało" },
+    { date: `${year}-08-15`, name: "Wniebowzięcie NMP" },
+    { date: `${year}-11-01`, name: "Wszystkich Świętych" },
+    { date: `${year}-11-11`, name: "Święto Niepodległości" },
+    ...(year >= 2025 ? [{ date: `${year}-12-24`, name: "Wigilia" }] : []),
+    { date: `${year}-12-25`, name: "Boże Narodzenie" },
+    { date: `${year}-12-26`, name: "Drugi dzień Bożego Narodzenia" },
+  ];
+}
+
+/** National public holidays in Spain (regions add their own). */
+export function spanishHolidays(year: number): Holiday[] {
+  const e = easter(year);
+  const friday = new Date(e);
+  friday.setDate(friday.getDate() - 2);
+  return [
+    { date: `${year}-01-01`, name: "Año Nuevo" },
+    { date: `${year}-01-06`, name: "Epifanía del Señor" },
+    { date: iso(friday), name: "Viernes Santo" },
+    { date: `${year}-05-01`, name: "Fiesta del Trabajo" },
+    { date: `${year}-08-15`, name: "Asunción de la Virgen" },
+    { date: `${year}-10-12`, name: "Fiesta Nacional de España" },
+    { date: `${year}-11-01`, name: "Todos los Santos" },
+    { date: `${year}-12-06`, name: "Día de la Constitución" },
+    { date: `${year}-12-08`, name: "Inmaculada Concepción" },
+    { date: `${year}-12-25`, name: "Navidad" },
+  ];
+}
+
 export function upcomingHolidays(profile: Profile, today: string, days = 45): (Holiday & { daysLeft: number })[] {
-  if (profile.country !== "DE") return [];
   const from = parse(today);
   const to = new Date(from);
   to.setDate(to.getDate() + days);
-  return [...germanHolidays(from.getFullYear(), profile.region), ...germanHolidays(from.getFullYear() + 1, profile.region)]
+  const byYear =
+    profile.country === "DE" ? (y: number) => germanHolidays(y, profile.region) : profile.country === "PL" ? polishHolidays : profile.country === "ES" ? spanishHolidays : null;
+  if (!byYear) return [];
+  return [...byYear(from.getFullYear()), ...byYear(from.getFullYear() + 1)]
     .filter((h) => parse(h.date) >= from && parse(h.date) <= to)
     .map((h) => ({ ...h, daysLeft: Math.round((parse(h.date).getTime() - from.getTime()) / 86_400_000) }));
 }
