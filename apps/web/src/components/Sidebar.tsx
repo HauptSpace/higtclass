@@ -1,6 +1,7 @@
 import { currencyChoices, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
 import { useActiveTable, useStore, type Theme } from "../store.ts";
+import { AccountBox } from "./Account.tsx";
 import { useDueItems } from "./ForYou.tsx";
 import { reportName } from "./Reports.tsx";
 
@@ -20,11 +21,15 @@ export function Sidebar({
   onImport,
   onNewReport,
   onNavigate,
+  onSignIn,
+  onShare,
 }: {
   onNewTable: () => void;
   onImport: () => void;
   onNewReport: () => void;
   onNavigate?: () => void;
+  onSignIn: () => void;
+  onShare: () => void;
 }) {
   const t = useT();
   const tables = useStore((s) => s.ws.tables);
@@ -218,7 +223,7 @@ export function Sidebar({
           </div>
         </div>
       </details>
-      <p className="px-2 text-xs text-rail-dim">{t("sidebar.saved")}</p>
+      <AccountBox onSignIn={onSignIn} onShare={onShare} />
     </nav>
   );
 }

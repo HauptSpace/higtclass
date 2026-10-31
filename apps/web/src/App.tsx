@@ -1,6 +1,8 @@
 import { setRegion } from "@higtclass/core";
 import { useEffect, useState } from "react";
+import { AccountDialog, ShareDialog, useInviteLink } from "./components/Account.tsx";
 import { ForYouView, useRulesSync } from "./components/ForYou.tsx";
+import { useCloudSync } from "./cloud.ts";
 import { ImportDialog } from "./components/ImportDialog.tsx";
 import { NewTableDialog } from "./components/NewTableDialog.tsx";
 import { ReportDialog, ReportView } from "./components/Reports.tsx";
@@ -62,7 +64,19 @@ export function App() {
   // Formats follow the browser's region (en-GB → 30/10/2026); set before rendering anything.
   setRegion(settings.region);
   useRulesSync();
+  useCloudSync();
+  const [signIn, setSignIn] = useState(false);
+  const [share, setShare] = useState(false);
+  useInviteLink(() => setSignIn(true));
   const sidebarProps = {
+    onSignIn: () => {
+      setDrawer(false);
+      setSignIn(true);
+    },
+    onShare: () => {
+      setDrawer(false);
+      setShare(true);
+    },
     onNewTable: () => {
       setDrawer(false);
       setNewTable(true);
@@ -140,6 +154,8 @@ export function App() {
       <NewTableDialog open={newTable} onClose={() => setNewTable(false)} />
       <ImportDialog open={importing} onClose={() => setImporting(false)} />
       <ReportDialog open={newReport} onClose={() => setNewReport(false)} reportId={null} />
+      <AccountDialog open={signIn} onClose={() => setSignIn(false)} />
+      <ShareDialog open={share} onClose={() => setShare(false)} />
       <Toast />
     </div>
   );

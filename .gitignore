@@ -5,3 +5,8 @@ dist/
 !.env.example
 *.log
 .DS_Store
+
+# Local databases
+*.db
+*.db-wal
+*.db-shm

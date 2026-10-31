@@ -63,6 +63,23 @@ export interface TableUi {
 
 export const DEFAULT_UI: TableUi = { period: { kind: "all" }, filters: [], sort: null, mode: "grid" };
 
+export type Role = "owner" | "editor" | "viewer";
+
+export interface Account {
+  token: string;
+  user: { id: string; email: string; name: string };
+}
+
+/** The shared workspace this device is linked to, and how far it has caught up. */
+export interface CloudLink {
+  id: string;
+  name: string;
+  version: number;
+  role: Role;
+}
+
+export type SyncState = "off" | "idle" | "saving" | "offline" | "error";
+
 interface State {
   ws: Workspace;
   settings: AppSettings;
@@ -79,6 +96,13 @@ interface State {
   /** Saved data has been read from the device; nothing is written before that. */
   hydrated: boolean;
   ui: Record<string, TableUi>;
+  account: Account | null;
+  cloud: CloudLink | null;
+  /** Changes made here that the server hasn't confirmed yet. */
+  pending: Op[];
+  /** This device, so its own changes aren't applied twice when they come back. */
+  clientId: string;
+  sync: SyncState;
 
   dispatch: (op: Op, label?: string) => boolean;
   undo: () => void;
@@ -92,6 +116,10 @@ interface State {
   showToast: (text: string, undoable?: boolean) => void;
   hideToast: () => void;
   setUi: (tableId: string, patch: Partial<TableUi>) => void;
+  /** Changes from other devices or people. */
+  applyRemote: (ops: Op[], version: number) => void;
+  /** Take the shared copy as it is (first link, switching, or after a conflict). */
+  takeCloudCopy: (link: CloudLink, data: Workspace) => void;
 }
 
 const HISTORY_LIMIT = 200;
@@ -137,6 +165,15 @@ const idbStorage: StateStorage = {
 
 let toastSeq = 0;
 
+const READ_ONLY: Record<string, string> = {
+  ru: "Только просмотр: менять может владелец или редактор.",
+  uk: "Лише перегляд: змінювати може власник або редактор.",
+  en: "View only: the owner or an editor can make changes.",
+  de: "Nur ansehen: Änderungen machen Inhaber oder Bearbeiter.",
+  es: "Solo lectura: pueden cambiarlo el propietario o un editor.",
+};
+const readOnlyText = (locale: string) => READ_ONLY[locale] ?? READ_ONLY.en;
+
 export const useStore = create<State>()(
   persist(
     (setState, getState) => ({
@@ -151,9 +188,18 @@ export const useStore = create<State>()(
       toast: null,
       hydrated: false,
       ui: {},
+      account: null,
+      cloud: null,
+      pending: [],
+      clientId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()),
+      sync: "off",
 
       dispatch(op, label = "") {
-        const { ws, past } = getState();
+        const { ws, past, cloud, pending } = getState();
+        if (cloud?.role === "viewer") {
+          getState().showToast(readOnlyText(getState().settings.locale), false);
+          return false;
+        }
         try {
           const inverse = invertOp(ws, op);
           const next = applyOp(ws, op);
@@ -161,6 +207,7 @@ export const useStore = create<State>()(
             ws: next,
             past: [...past, { label, op, inverse }].slice(-HISTORY_LIMIT),
             future: [],
+            ...(cloud ? { pending: [...pending, op] } : {}),
           });
           return true;
         } catch (e) {
@@ -172,9 +219,10 @@ export const useStore = create<State>()(
       undo() {
         const { ws, past, future } = getState();
         const entry = past.at(-1);
-        if (!entry) return;
+        if (!entry || getState().cloud?.role === "viewer") return;
         try {
-          setState({ ws: applyOp(ws, entry.inverse), past: past.slice(0, -1), future: [...future, entry] });
+          const { cloud, pending } = getState();
+          setState({ ws: applyOp(ws, entry.inverse), past: past.slice(0, -1), future: [...future, entry], ...(cloud ? { pending: [...pending, entry.inverse] } : {}) });
         } catch (e) {
           console.error("Undo failed", e);
         }
@@ -183,13 +231,15 @@ export const useStore = create<State>()(
       redo() {
         const { ws, past, future } = getState();
         const entry = future.at(-1);
-        if (!entry) return;
+        if (!entry || getState().cloud?.role === "viewer") return;
         try {
           const inverse = invertOp(ws, entry.op);
+          const { cloud, pending } = getState();
           setState({
             ws: applyOp(ws, entry.op),
             past: [...past, { ...entry, inverse }],
             future: future.slice(0, -1),
+            ...(cloud ? { pending: [...pending, entry.op] } : {}),
           });
         } catch (e) {
           console.error("Redo failed", e);
@@ -229,6 +279,36 @@ export const useStore = create<State>()(
         setState({ toast: null });
       },
 
+      applyRemote(ops, version) {
+        const { ws, cloud } = getState();
+        if (!cloud) return;
+        let next = ws;
+        for (const op of ops) {
+          try {
+            next = applyOp(next, op);
+          } catch (e) {
+            // Our copy disagrees with the shared one: the sync loop reloads it.
+            console.warn("Remote change did not apply", e);
+            setState({ cloud: { ...cloud, version: -1 } });
+            return;
+          }
+        }
+        // Undo history refers to the old state; someone else's change makes it unsafe.
+        setState({ ws: next, cloud: { ...cloud, version }, ...(ops.length ? { past: [], future: [] } : {}) });
+      },
+
+      takeCloudCopy(link, data) {
+        const { activeTableId } = getState();
+        setState({
+          ws: data,
+          cloud: link,
+          pending: [],
+          past: [],
+          future: [],
+          activeTableId: data.tables.some((t) => t.id === activeTableId) ? activeTableId : (data.tables[0]?.id ?? null),
+        });
+      },
+
       setUi(tableId, patch) {
         const { ui } = getState();
         setState({ ui: { ...ui, [tableId]: { ...DEFAULT_UI, ...ui[tableId], ...patch } } });
@@ -255,6 +335,10 @@ export const useStore = create<State>()(
         page: s.page,
         rules: s.rules,
         ui: s.ui,
+        account: s.account,
+        cloud: s.cloud,
+        pending: s.pending,
+        clientId: s.clientId,
       }),
     },
   ),

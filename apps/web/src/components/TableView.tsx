@@ -64,6 +64,8 @@ export function TableView({ table }: { table: Table }) {
   const dispatch = useStore((s) => s.dispatch);
   const showToast = useStore((s) => s.showToast);
   const setUiRaw = useStore((s) => s.setUi);
+  // A shared workspace opened "view only": nothing to type into.
+  const readOnly = useStore((s) => s.cloud?.role === "viewer");
   const ui = useTableUi(table.id);
   const setUi = (patch: Partial<TableUi>) => setUiRaw(table.id, patch);
   const text = useCellText();
@@ -152,7 +154,7 @@ export function TableView({ table }: { table: Table }) {
         <div className="flex items-start gap-3">
           <TableTitle name={table.name} onRename={rename} />
           <div className="ml-auto flex shrink-0 items-center gap-2 pt-1 md:pt-3">
-            {!mobile && (
+            {!mobile && !readOnly && (
               <Button variant="primary" onClick={() => setRecord({ rowId: null })}>
                 ＋ {t("table.record")}
               </Button>
@@ -310,7 +312,7 @@ export function TableView({ table }: { table: Table }) {
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col border-t-2 border-rule">
-            <AssistantBar tableId={table.id} onEdit={(preset) => setRecord({ rowId: null, preset })} />
+            {!readOnly && <AssistantBar tableId={table.id} onEdit={(preset) => setRecord({ rowId: null, preset })} />}
             {table.rows.length === 0 && (mobile || mode !== "grid") ? (
               <EmptyRows template={table.template} />
             ) : rows.length === 0 && mode === "grid" && !mobile ? (
@@ -376,7 +378,7 @@ export function TableView({ table }: { table: Table }) {
         )}
       </div>
 
-      {mobile && (
+      {mobile && !readOnly && (
         <button
           type="button"
           onClick={() => setRecord({ rowId: null })}
