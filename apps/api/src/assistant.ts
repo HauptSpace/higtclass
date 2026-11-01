@@ -1,14 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { describeWorkspace, todayISO, type Op, type Settings, type Workspace } from "@higtclass/core";
+import { describeWorkspace, todayISO, type Op, type Settings, type Workspace } from "@sumira/core";
 import { applyOutcome, runTool, TOOLS } from "./tools.ts";
 
-export const MODEL = process.env.ZIFRA_MODEL ?? "claude-haiku-5-5";
+export const MODEL = process.env.SUMIRA_MODEL ?? "claude-haiku-5-5";
 // Server-side refusal fallbacks exist for Opus/Sonnet/Fable, not for Haiku.
 const FALLBACKS = /claude-(opus|sonnet|fable)/.test(MODEL);
-const EFFORT = (process.env.ZIFRA_EFFORT ?? "low") as "low" | "medium" | "high";
+const EFFORT = (process.env.SUMIRA_EFFORT ?? "low") as "low" | "medium" | "high";
 const MAX_TURNS = 6;
 
-const SYSTEM = `You are the assistant inside Zifra, a table app for everyone from a street vendor to a CEO.
+const SYSTEM = `You are the assistant inside Sumira, a table app for everyone from a street vendor to a CEO.
 People tell you in plain words — often dictated, sometimes with a photo of a receipt or document — what happened, and you turn it into table changes with the tools.
 
 How to work:

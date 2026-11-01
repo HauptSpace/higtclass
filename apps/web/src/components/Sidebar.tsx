@@ -1,4 +1,4 @@
-import { currencyChoices, LOCALE_RULES, LOCALES, type Locale } from "@higtclass/core";
+import { currencyChoices, LOCALE_RULES, LOCALES, type Locale } from "@sumira/core";
 import { LANGUAGE_NAMES, useT } from "../i18n/index.ts";
 import { useActiveTable, useStore, type Theme } from "../store.ts";
 import { AccountBox } from "./Account.tsx";
@@ -10,7 +10,7 @@ const NO_REPORTS: never[] = [];
 export const ACCENTS = ["#E5352B", "#1F4FE0", "#FF7A1A", "#6D4AFF", "#7A4B2A", "#E2457A"];
 
 export function Wordmark({ className = "" }: { className?: string }) {
-  return <span className={`font-display font-bold tracking-[-0.05em] ${className}`}>zifra</span>;
+  return <span className={`font-display font-bold tracking-[-0.05em] ${className}`}>sumira</span>;
 }
 
 const railSelect =

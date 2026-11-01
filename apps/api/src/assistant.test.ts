@@ -1,4 +1,4 @@
-import { applyOp, createTable, type Op, type Workspace } from "@higtclass/core";
+import { applyOp, createTable, type Op, type Workspace } from "@sumira/core";
 import { describe, expect, it } from "vitest";
 import { AssistantError, runAssistant, type MessagesClient } from "./assistant.ts";
 import { runTool } from "./tools.ts";

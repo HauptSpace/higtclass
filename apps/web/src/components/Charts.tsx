@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-// Single-series charts in Zifra's black and white: ink marks with 4px rounded
+// Single-series charts in Sumira's black and white: ink marks with 4px rounded
 // data ends, recessive grid, a tooltip on hover or tap, and the numbers always
 // available as text next to or under the chart.
 

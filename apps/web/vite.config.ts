@@ -8,6 +8,6 @@ export default defineConfig({
   base: "./",
   server: {
     host: true,
-    proxy: { "/api": process.env.ZIFRA_API ?? "http://localhost:8787" },
+    proxy: { "/api": process.env.SUMIRA_API ?? "http://localhost:8787" },
   },
 });

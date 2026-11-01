@@ -143,7 +143,7 @@ function typeColumn(l: Locale): ColumnDraft {
   return { name: N.type[l], type: "select", options: [INCOME[l], EXPENSE[l]], default: EXPENSE[l], optionColors: { [INCOME[l]]: "var(--paid)" } };
 }
 
-/** What the person told the onboarding they want Zifra for. */
+/** What the person told the onboarding they want Sumira for. */
 export type UseCase = "personal" | "trade" | "services" | "team" | "finance" | "other";
 
 export const USE_CASES: { id: UseCase; icon: string; name: L10n; hint: L10n }[] = [
@@ -283,11 +283,11 @@ export const TEMPLATES: Template[] = [
       "Lo que entra, lo que sale y lo que queda",
     ),
     why: tr(
-      "Сверху сразу видно: доход, траты и остаток за месяц. Напишите «кофе 85» — Zifra сама поставит категорию.",
-      "Зверху одразу видно: дохід, витрати й залишок за місяць. Напишіть «кава 85» — Zifra сама поставить категорію.",
-      "Income, spending and what's left this month, right on top. Type “coffee 4.50” and Zifra picks the category.",
-      "Einnahmen, Ausgaben und Rest des Monats stehen oben. Tippen Sie „Kaffee 3,50“ — Zifra wählt die Kategorie.",
-      "Arriba ves ingresos, gastos y lo que queda este mes. Escribe «café 2,50» y Zifra pone la categoría.",
+      "Сверху сразу видно: доход, траты и остаток за месяц. Напишите «кофе 85» — Sumira сама поставит категорию.",
+      "Зверху одразу видно: дохід, витрати й залишок за місяць. Напишіть «кава 85» — Sumira сама поставить категорію.",
+      "Income, spending and what's left this month, right on top. Type “coffee 4.50” and Sumira picks the category.",
+      "Einnahmen, Ausgaben und Rest des Monats stehen oben. Tippen Sie „Kaffee 3,50“ — Sumira wählt die Kategorie.",
+      "Arriba ves ingresos, gastos y lo que queda este mes. Escribe «café 2,50» y Sumira pone la categoría.",
     ),
     when: tr(
       "Хотите понимать, сколько приходит и куда уходит.",
@@ -790,11 +790,11 @@ export const TEMPLATES: Template[] = [
       "Cuánto has apartado y cuánto te falta",
     ),
     why: tr(
-      "Цель и полоска прогресса сверху. Zifra скажет, сколько откладывать в месяц, чтобы успеть.",
-      "Ціль і смужка прогресу зверху. Zifra скаже, скільки відкладати щомісяця, щоб встигнути.",
-      "Your goal and a progress bar on top. Zifra tells you how much to save each month to make it.",
-      "Ziel und Fortschrittsbalken oben. Zifra sagt, wie viel Sie monatlich sparen müssen.",
-      "Tu objetivo y una barra de progreso arriba. Zifra te dice cuánto ahorrar al mes para llegar.",
+      "Цель и полоска прогресса сверху. Sumira скажет, сколько откладывать в месяц, чтобы успеть.",
+      "Ціль і смужка прогресу зверху. Sumira скаже, скільки відкладати щомісяця, щоб встигнути.",
+      "Your goal and a progress bar on top. Sumira tells you how much to save each month to make it.",
+      "Ziel und Fortschrittsbalken oben. Sumira sagt, wie viel Sie monatlich sparen müssen.",
+      "Tu objetivo y una barra de progreso arriba. Sumira te dice cuánto ahorrar al mes para llegar.",
     ),
     when: tr(
       "Копите на отпуск, машину или подушку безопасности.",

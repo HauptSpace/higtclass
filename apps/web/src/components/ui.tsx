@@ -1,4 +1,4 @@
-import type { Column } from "@higtclass/core";
+import type { Column } from "@sumira/core";
 import { useEffect, type ButtonHTMLAttributes, type ReactNode, type RefObject } from "react";
 
 type Variant = "primary" | "outline" | "ghost" | "danger";

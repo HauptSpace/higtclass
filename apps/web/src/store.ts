@@ -13,7 +13,7 @@ import {
   type Op,
   type Settings,
   type Workspace,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { del, get, set } from "idb-keyval";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
@@ -37,7 +37,7 @@ export type Theme = "system" | "light" | "dark";
 
 export interface AppSettings extends Settings {
   theme: Theme;
-  /** Company accent colour; null keeps Zifra black and white. */
+  /** Company accent colour; null keeps Sumira black and white. */
   accent: string | null;
   /** Country and tax situation, for tips and deadlines. null until the person answers. */
   profile: Profile | null;
@@ -143,7 +143,8 @@ let canWrite = false;
 const idbStorage: StateStorage = {
   async getItem(name) {
     try {
-      return (await get<string>(name)) ?? null;
+      // The app was called Zifra before: tables saved under the old name still open.
+      return (await get<string>(name)) ?? (name === "sumira:v1" ? await get<string>("zifra:v1") : undefined) ?? null;
     } catch {
       return null;
     }
@@ -318,7 +319,7 @@ export const useStore = create<State>()(
       },
     }),
     {
-      name: "zifra:v1",
+      name: "sumira:v1",
       version: 4,
       migrate: (persisted, version) => {
         const state = persisted as Partial<State>;

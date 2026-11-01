@@ -1,4 +1,4 @@
-import { FLOW_FILTER, formatDateNumeric, ledgerOf, parseDate, rowLabel, type Column, type Filter, type Period, type PeriodKind, type Table } from "@higtclass/core";
+import { FLOW_FILTER, formatDateNumeric, ledgerOf, parseDate, rowLabel, type Column, type Filter, type Period, type PeriodKind, type Table } from "@sumira/core";
 import { useRef, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { dateExample, periodLabel } from "../lib.ts";

@@ -1,4 +1,4 @@
-import { addRecords, ledgerOf, parseQuickEntries, type CellValue, type Op, type RawRecord } from "@higtclass/core";
+import { addRecords, ledgerOf, parseQuickEntries, type CellValue, type Op, type RawRecord } from "@sumira/core";
 import { useRef, useState } from "react";
 import { askAssistant, describeOps, readPhoto, type AssistantFailure, type PhotoInput } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
@@ -8,7 +8,7 @@ import { useStore } from "../store.ts";
 import { Button } from "./ui.tsx";
 
 // The line at the top of every table: say, type or photograph what happened,
-// see how Zifra understood it, then save it with one press.
+// see how Sumira understood it, then save it with one press.
 
 type Phase =
   | { kind: "idle" }
@@ -160,7 +160,7 @@ export function AssistantBar({ tableId, onEdit }: { tableId: string; onEdit?: (p
       warnStock(before, tableId, inserted);
       reset();
     } else {
-      // The table changed while Zifra was thinking: ask again on fresh data.
+      // The table changed while Sumira was thinking: ask again on fresh data.
       setPhase({ kind: "failed", failure: "error" });
     }
   };

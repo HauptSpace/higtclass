@@ -1,4 +1,4 @@
-import { createTable, instantiateTemplate, templateColumns, templatesFor, USE_CASES, type Op, type Template, type UseCase } from "@higtclass/core";
+import { createTable, instantiateTemplate, templateColumns, templatesFor, USE_CASES, type Op, type Template, type UseCase } from "@sumira/core";
 import { useState } from "react";
 import { askAssistant, type AssistantFailure } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";
@@ -7,7 +7,7 @@ import { ChangeList } from "./AssistantBar.tsx";
 import { Hero } from "./Hero.tsx";
 import { Button, inputClass } from "./ui.tsx";
 
-// First run (and "New table"): what is Zifra for → tables that fit, each with
+// First run (and "New table"): what is Sumira for → tables that fit, each with
 // why it beats a spreadsheet and when to pick it → or describe it in words.
 
 const ICON_PATHS: Record<UseCase, string> = {

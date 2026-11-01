@@ -13,7 +13,7 @@ import {
   type Report,
   type Table,
   type Workspace,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useEffect, useMemo, useState } from "react";
 import { translator, useT, type Translate } from "../i18n/index.ts";
 import { periodLabel, useToday } from "../lib.ts";

@@ -1,8 +1,8 @@
-import { cellText, type CellValue, type Op, type Table, type Workspace } from "@higtclass/core";
+import { cellText, type CellValue, type Op, type Table, type Workspace } from "@sumira/core";
 import type { Translate } from "./i18n/index.ts";
 import type { AppSettings } from "./store.ts";
 
-// Talking to the Zifra API, and turning the operations it proposes into
+// Talking to the Sumira API, and turning the operations it proposes into
 // something a person can read before pressing "Записать".
 
 const API = (import.meta.env.VITE_API_URL as string | undefined) ?? "";

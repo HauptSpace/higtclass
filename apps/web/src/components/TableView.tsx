@@ -21,7 +21,7 @@ import {
   type SavedView,
   type Table,
   type ViewMode,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useMemo, useRef, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { exportCsv, exportXlsx } from "../exporter.ts";

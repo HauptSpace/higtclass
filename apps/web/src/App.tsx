@@ -1,4 +1,4 @@
-import { setRegion } from "@higtclass/core";
+import { setRegion } from "@sumira/core";
 import { useEffect, useState } from "react";
 import { AccountDialog, ShareDialog, useInviteLink } from "./components/Account.tsx";
 import { ForYouView, useRulesSync } from "./components/ForYou.tsx";

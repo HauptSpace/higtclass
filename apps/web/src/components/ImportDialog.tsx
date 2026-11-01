@@ -12,13 +12,13 @@ import {
   type ColumnType,
   type ImportPlan,
   type RawCell,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { useStore } from "../store.ts";
 import { Button, Dialog, inputClass, Label } from "./ui.tsx";
 
-// Moving off Excel or a bank export in a minute: pick a file, check what Zifra
+// Moving off Excel or a bank export in a minute: pick a file, check what Sumira
 // understood (header row, column types, skipped "Total" rows), then import as
 // a new table or add the rows to an existing one.
 

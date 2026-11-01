@@ -4,7 +4,7 @@ import { parseBoolean, parseDate, parseNumber } from "./values.ts";
 
 // Importing someone's old Excel or CSV: look at each column's values and guess
 // the type a person would have picked — dates, money, choices, checkboxes —
-// so the imported table works like a Zifra table from the first minute.
+// so the imported table works like a Sumira table from the first minute.
 
 /** One raw cell from a file: what a spreadsheet reader hands back. */
 export type RawCell = string | number | boolean | Date | null | undefined;
@@ -20,7 +20,7 @@ const HEADER_CURRENCY: [RegExp, string][] = [
   [/zł|\bpln\b/i, "PLN"],
   [/\bchf\b/i, "CHF"],
 ];
-/** A row that totals the ones above it: skip it on import, Zifra totals by itself. */
+/** A row that totals the ones above it: skip it on import, Sumira totals by itself. */
 // No \b: it doesn't work after Cyrillic letters ("Итого").
 const TOTAL_ROW = /^(итого|итог|всего|разом|всього|підсумок|total|totals|sum|summe|gesamt|insgesamt|suma|totales?)(?=$|[\s:.])/i;
 

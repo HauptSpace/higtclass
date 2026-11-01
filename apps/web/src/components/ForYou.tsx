@@ -28,7 +28,7 @@ import {
   type Suggestion,
   type Table,
   type TaxRegime,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useEffect, useMemo, useState } from "react";
 import { useT, type Translate } from "../i18n/index.ts";
 import { useToday } from "../lib.ts";

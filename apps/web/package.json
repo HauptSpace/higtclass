@@ -1,5 +1,5 @@
 {
-  "name": "@higtclass/web",
+  "name": "@sumira/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   "dependencies": {
     "@fontsource/golos-text": "5.3.0",
     "@fontsource/unbounded": "5.3.0",
-    "@higtclass/core": "workspace:*",
+    "@sumira/core": "workspace:*",
     "idb-keyval": "6.3.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

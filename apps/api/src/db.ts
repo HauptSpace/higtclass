@@ -6,7 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export type Db = DatabaseSync;
 
-export function openDb(path = process.env.ZIFRA_DB ?? "zifra.db"): Db {
+export function openDb(path = process.env.SUMIRA_DB ?? "sumira.db"): Db {
   const db = new DatabaseSync(path);
   db.exec(`
     PRAGMA journal_mode = WAL;

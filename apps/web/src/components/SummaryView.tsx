@@ -12,7 +12,7 @@ import {
   type Column,
   type ColumnSummary,
   type Table,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useT } from "../i18n/index.ts";
 import { leadColumn } from "../lib.ts";
 import { useStore } from "../store.ts";

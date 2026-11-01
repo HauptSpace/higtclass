@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { serve } from "@hono/node-server";
-import { DEFAULT_RULES, isRulePack, LOCALES } from "@higtclass/core";
+import { DEFAULT_RULES, isRulePack, LOCALES } from "@sumira/core";
 import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -12,7 +12,7 @@ import { ratesFor } from "./rates.ts";
 export function createApp({ db, client }: { db: Db; client: Anthropic | null }) {
   const app = new Hono();
   // The web app (and later the desktop app) call this from another origin in development.
-  app.use("/api/*", cors({ origin: (process.env.ZIFRA_ORIGINS ?? "*").split(","), allowHeaders: ["content-type", "authorization"] }));
+  app.use("/api/*", cors({ origin: (process.env.SUMIRA_ORIGINS ?? "*").split(","), allowHeaders: ["content-type", "authorization"] }));
 
   app.get("/api/health", (c) => c.json({ ok: true, assistant: client !== null }));
 
@@ -34,14 +34,14 @@ export function createApp({ db, client }: { db: Db; client: Anthropic | null }) 
   // Tips and deadlines ("Для вас"). Edit the JSON file on the server to update
   // every app without a release; the bundled pack is the fallback.
   app.get("/api/rules", async (c) => {
-    const file = process.env.ZIFRA_RULES_FILE;
+    const file = process.env.SUMIRA_RULES_FILE;
     if (file) {
       try {
         const pack: unknown = JSON.parse(await readFile(file, "utf8"));
         if (isRulePack(pack)) return c.json(pack);
-        console.error("ZIFRA_RULES_FILE is not a valid rule pack");
+        console.error("SUMIRA_RULES_FILE is not a valid rule pack");
       } catch (e) {
-        console.error("Could not read ZIFRA_RULES_FILE", e);
+        console.error("Could not read SUMIRA_RULES_FILE", e);
       }
     }
     return c.json(DEFAULT_RULES);
@@ -85,5 +85,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const app = createApp({ db: openDb(), client: hasKey ? new Anthropic() : null });
   const port = Number(process.env.PORT ?? 8787);
   serve({ fetch: app.fetch, port });
-  console.log(`Zifra API on http://localhost:${port} (assistant ${hasKey ? "on" : "off: set ANTHROPIC_API_KEY"})`);
+  console.log(`Sumira API on http://localhost:${port} (assistant ${hasKey ? "on" : "off: set ANTHROPIC_API_KEY"})`);
 }

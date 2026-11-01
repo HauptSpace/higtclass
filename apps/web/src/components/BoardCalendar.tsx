@@ -1,4 +1,4 @@
-import { cellText, localeTag, periodRange, type Column, type Period, type Row, type Table } from "@higtclass/core";
+import { cellText, localeTag, periodRange, type Column, type Period, type Row, type Table } from "@sumira/core";
 import { useEffect, useMemo, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { useToday } from "../lib.ts";
@@ -75,7 +75,7 @@ export function BoardView({
               onDrop={(e) => {
                 e.preventDefault();
                 setOver(null);
-                const id = e.dataTransfer.getData("text/zifra-row");
+                const id = e.dataTransfer.getData("text/sumira-row");
                 if (id) move(id, lane);
               }}
               className={`flex w-72 shrink-0 flex-col rounded-2xl bg-soft p-2 ${over === lane ? "ring-2 ring-ink" : ""}`}
@@ -91,7 +91,7 @@ export function BoardView({
                     key={r.id}
                     draggable
                     onDragStart={(e) => {
-                      e.dataTransfer.setData("text/zifra-row", r.id);
+                      e.dataTransfer.setData("text/sumira-row", r.id);
                       e.dataTransfer.effectAllowed = "move";
                     }}
                     className="cursor-grab rounded-xl border-2 border-transparent bg-paper p-3 shadow-sm hover:border-ink active:cursor-grabbing"

@@ -17,7 +17,7 @@ import {
   type Settings,
   type Table,
   type Workspace,
-} from "@higtclass/core";
+} from "@sumira/core";
 import type { Translate } from "./i18n/index.ts";
 
 // Downloads for the accountant: a real .xlsx with numbers as numbers, dates as
@@ -34,7 +34,7 @@ export interface ExportOptions {
 }
 
 function fileName(name: string, ext: string) {
-  const safe = name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "zifra";
+  const safe = name.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "sumira";
   return `${safe} ${todayISO()}.${ext}`;
 }
 
@@ -126,7 +126,7 @@ export async function exportXlsx(ws: Workspace, table: Table, settings: Settings
     return { width: Math.min(50, Math.max(10, longest + 2)) };
   });
   const sheets: unknown[] = [[header, ...body, [null], totals]];
-  const sheetNames = [table.name.slice(0, 31) || "Zifra"];
+  const sheetNames = [table.name.slice(0, 31) || "Sumira"];
   const columns: unknown[] = [widths];
 
   // Income and expenses: a second sheet with totals by category and the profit.

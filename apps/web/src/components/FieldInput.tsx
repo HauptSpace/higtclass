@@ -1,4 +1,4 @@
-import { cellText, formatDateNumeric, parseDate, rowLabel, type Column, type Table } from "@higtclass/core";
+import { cellText, formatDateNumeric, parseDate, rowLabel, type Column, type Table } from "@sumira/core";
 import { useId, useMemo, useRef, useState } from "react";
 import { readPhoto } from "../assistant.ts";
 import { useT } from "../i18n/index.ts";

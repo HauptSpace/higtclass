@@ -3,7 +3,7 @@ import type { CellValue, Column, Goal, Ledger, Table } from "./types.ts";
 
 // What the money in a table means. Without this, a table with salary and
 // coffee adds them together and the big number on top means nothing. With it
-// Zifra says: came in, went out, what's left — and counts only paid invoices.
+// Sumira says: came in, went out, what's left — and counts only paid invoices.
 
 export const INCOME_WORDS =
   /(доход|дохід|приход|надходж|поступлен|зарплат|аванс|преми|премі|кешбек|income|salary|revenue|bonus|cashback|einnahm|umsatz|gehalt|erlös|prämie|ingreso|sueldo|nómina|cobro)/i;

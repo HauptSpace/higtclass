@@ -19,7 +19,7 @@ import {
   type Row,
   type Table,
   rowSide,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { draftOf, problemText, useStockWarnings, useToday } from "../lib.ts";

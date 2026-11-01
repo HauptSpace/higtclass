@@ -1,8 +1,8 @@
-import type { Op, Workspace } from "@higtclass/core";
+import type { Op, Workspace } from "@sumira/core";
 import { useEffect } from "react";
 import { useStore, type Account, type CloudLink, type Role } from "./store.ts";
 
-// Talking to the Zifra server: sign in, keep this device's tables in the
+// Talking to the Sumira server: sign in, keep this device's tables in the
 // shared copy, and bring in what other devices and teammates changed.
 // The app keeps working offline; changes wait in `pending` until the server
 // confirms them.

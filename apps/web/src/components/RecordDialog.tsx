@@ -13,7 +13,7 @@ import {
   type Problem,
   type Row,
   type Table,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useEffect, useMemo, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { draftOf, problemText, useStockWarnings, useToday } from "../lib.ts";

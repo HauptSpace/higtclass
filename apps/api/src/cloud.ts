@@ -1,4 +1,4 @@
-import { applyOp, OpError, type Op, type Workspace } from "@higtclass/core";
+import { applyOp, OpError, type Op, type Workspace } from "@sumira/core";
 import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { Hono, type Context } from "hono";
@@ -142,7 +142,7 @@ export function cloudRoutes(db: Db) {
     if (text.length > MAX_DATA) return c.json({ error: "too_large" }, 413);
     const wsId = id("w_");
     const now = Date.now();
-    db.prepare("INSERT INTO workspaces (id, name, data, version, updated) VALUES (?, ?, ?, 0, ?)").run(wsId, String(body?.name ?? "Zifra").slice(0, 80), text, now);
+    db.prepare("INSERT INTO workspaces (id, name, data, version, updated) VALUES (?, ?, ?, 0, ?)").run(wsId, String(body?.name ?? "Sumira").slice(0, 80), text, now);
     db.prepare("INSERT INTO members (workspace_id, user_id, role) VALUES (?, ?, 'owner')").run(wsId, user.id);
     return c.json({ id: wsId, version: 0, role: "owner" });
   });

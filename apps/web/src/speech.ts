@@ -1,4 +1,4 @@
-import { localeTag, type Locale } from "@higtclass/core";
+import { localeTag, type Locale } from "@sumira/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // Dictation through the browser's own speech recognition (Chrome, Edge,

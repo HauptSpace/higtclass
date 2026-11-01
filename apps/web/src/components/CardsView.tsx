@@ -1,4 +1,4 @@
-import { cellText, computeRow, displayColumn, ledgerOf, localeTag, rowFlow, rowSide, todayISO, type Column, type Row, type Table } from "@higtclass/core";
+import { cellText, computeRow, displayColumn, ledgerOf, localeTag, rowFlow, rowSide, todayISO, type Column, type Row, type Table } from "@sumira/core";
 import { useToday } from "../lib.ts";
 import { useStore } from "../store.ts";
 import { StatusMark } from "./GridView.tsx";

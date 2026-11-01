@@ -1,4 +1,4 @@
-import { displayColumn, ledgerOf, parseDate, parseNumber, type Ledger, type Table } from "@higtclass/core";
+import { displayColumn, ledgerOf, parseDate, parseNumber, type Ledger, type Table } from "@sumira/core";
 import { useEffect, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { dateExample } from "../lib.ts";
@@ -6,7 +6,7 @@ import { useStore } from "../store.ts";
 import { Button, Chips, Dialog, inputClass, Label } from "./ui.tsx";
 
 // What the money in a table means, and a savings goal. Both are optional:
-// Zifra guesses the first from templates and names, the person can correct it.
+// Sumira guesses the first from templates and names, the person can correct it.
 
 export function moneyColumns(table: Table, ws: Parameters<typeof displayColumn>[2]) {
   return table.columns.filter((c) => displayColumn(table, c, ws).type === "money" || c.type === "number");

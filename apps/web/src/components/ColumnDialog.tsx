@@ -16,7 +16,7 @@ import {
   type Op,
   type RollupAgg,
   type Table,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useEffect, useState } from "react";
 import { useT } from "../i18n/index.ts";
 import { useToday } from "../lib.ts";

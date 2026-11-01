@@ -1,4 +1,4 @@
-import type { Locale } from "@higtclass/core";
+import type { Locale } from "@sumira/core";
 import { useStore } from "../store.ts";
 import { de } from "./de.ts";
 import { en, type MessageKey, type Messages } from "./en.ts";

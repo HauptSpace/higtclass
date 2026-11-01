@@ -15,7 +15,7 @@ import {
   type Problem,
   type Table,
   type Workspace,
-} from "@higtclass/core";
+} from "@sumira/core";
 import { useCallback, useEffect, useState } from "react";
 import { useT, type Translate } from "./i18n/index.ts";
 import { useStore } from "./store.ts";

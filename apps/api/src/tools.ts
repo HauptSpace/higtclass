@@ -9,7 +9,7 @@ import {
   type Op,
   type Problem,
   type Workspace,
-} from "@higtclass/core";
+} from "@sumira/core";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 
